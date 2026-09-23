@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>REEL</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <canvas id="application"></canvas>
+
+    <div class="shell">
+      <header class="hud">
+        <div class="hud-group">
+          <span class="label">Session</span>
+          <strong id="session-timer">90s</strong>
+        </div>
+        <div class="hud-group">
+          <span class="label">Score</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="hud-group">
+          <span class="label">Coins</span>
+          <strong id="coins">0</strong>
+        </div>
+        <div class="hud-group">
+          <span class="label">Best</span>
+          <strong id="best-score">0</strong>
+        </div>
+      </header>
+
+      <section class="status-card">
+        <div>
+          <span class="label">State</span>
+          <strong id="state-label">Menu</strong>
+        </div>
+        <div>
+          <span class="label">Fish</span>
+          <strong id="fish-label">—</strong>
+        </div>
+        <div>
+          <span class="label">Streak</span>
+          <strong id="streak-label">0</strong>
+        </div>
+      </section>
+
+      <section class="meters">
+        <div class="meter-block">
+          <div class="meter-head">
+            <span>Catch progress</span>
+            <span id="progress-value">0%</span>
+          </div>
+          <div class="meter">
+            <div class="meter-fill progress-fill" id="progress-bar"></div>
+          </div>
+        </div>
+
+        <div class="meter-block">
+          <div class="meter-head">
+            <span>Line tension</span>
+            <span id="tension-value">0%</span>
+          </div>
+          <div class="meter">
+            <div class="meter-fill tension-fill" id="tension-bar"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="message-card">
+        <h1 id="message-title">REEL</h1>
+        <p id="message-body">
+          Cast into the meme lagoon, hook fast, and reel only when the line calms down.
+        </p>
+      </section>
+
+      <section class="controls">
+        <button id="start-button" class="button primary">Start session</button>
+        <button id="cast-button" class="button">Cast</button>
+        <button id="hook-button" class="button">Hook</button>
+        <button id="reel-button" class="button accent">Hold to reel</button>
+        <button id="pause-button" class="button secondary">Pause</button>
+      </section>
+
+      <section class="overlay hidden" id="pause-overlay">
+        <div class="overlay-card">
+          <h2>Paused</h2>
+          <p>Take a breather. The fish can wait.</p>
+          <button id="resume-button" class="button primary">Resume</button>
+        </div>
+      </section>
+
+      <section class="overlay hidden" id="gameover-overlay">
+        <div class="overlay-card">
+          <h2>Session complete</h2>
+          <p id="gameover-summary">You banked 0 coins.</p>
+          <button id="replay-button" class="button primary">Play again</button>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
