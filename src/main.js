@@ -599,7 +599,7 @@ class ReelGame {
 
     this.fish.enabled = true;
     const material = this.fish.render.material;
-    const color = pc.Color.fromString(this.currentFish.color);
+    const color = new pc.Color().fromString(this.currentFish.color);
     material.diffuse = color;
     material.emissive = color.clone().mulScalar(0.14);
     material.update();
@@ -642,10 +642,10 @@ class ReelGame {
 
   refreshUi() {
     const visibleScore = Math.round(this.score);
-    const visibleCoins = this.save.totalCoins + this.sessionCoins;
+    const visibleCoins = this.save.totalCoins;
     this.ui.score.textContent = String(visibleScore);
     this.ui.coins.textContent = String(visibleCoins);
-    this.ui.bestScore.textContent = String(this.save.bestScore);
+    this.ui.bestScore.textContent = String(Math.max(this.save.bestScore, visibleScore));
     this.ui.sessionTimer.textContent = `${Math.ceil(this.sessionTime)}s`;
     this.ui.fishLabel.textContent = this.currentFish ? this.currentFish.name : '—';
     this.ui.streakLabel.textContent = String(this.streak);
