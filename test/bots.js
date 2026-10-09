@@ -16,9 +16,9 @@ export const policies = {
   }
 };
 
-export function simulate({ species, weight, rod, reel, line, policy, seed, distance = 25, maxTime = 300 }) {
+export function simulate({ species, weight, rod, reel, line, policy, seed, distance = 25, maxTime = 300, current = 0 }) {
   const rng = createRng(seed);
-  const f = createFight(rng, { species, weight, rod, reel, line, distance, depth: 2, bottomAt: () => 8 });
+  const f = createFight(rng, { species, weight, rod, reel, line, distance, depth: 2, bottomAt: () => 8, current });
   const dt = 1 / 30;
   while (!f.result && f.t < maxTime) {
     const input = policies[policy](f);

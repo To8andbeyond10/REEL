@@ -1,20 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { biteRates, rollBite, rollWeight, strike, createBite, stepBite, stepLureDepth } from '../src/sim/bite.js';
-import { LINES, LURES, SPOTS, SPECIES, byId, speciesById } from '../src/sim/data.js';
+import { LINES, LURES, SPECIES, byId, speciesById } from '../src/sim/data.js';
+import { spotById } from '../src/sim/waters.js';
 import { createRng } from '../src/sim/random.js';
 
 const rateOf = (opts, id) => biteRates({ line: LINES[0], weather: 'cloudy', retrieving: 0, ...opts }).find((r) => r.species.id === id).rate;
 
 test('catfish bite bottom rigs at night far more than spinners at noon', () => {
-  const spot = byId(SPOTS, 'point');
+  const spot = spotById('point');
   const night = rateOf({ spot, lure: byId(LURES, 'bottom'), depth: 9, hour: 23 }, 'stonks-cat');
   const noon = rateOf({ spot, lure: byId(LURES, 'spinner'), depth: 1, hour: 12, retrieving: 0.7 }, 'stonks-cat');
   assert.ok(night > noon * 20);
 });
 
 test('a lure that is not moving barely gets bites unless it is a jig', () => {
-  const spot = byId(SPOTS, 'reeds');
+  const spot = spotById('reeds');
   const still = rateOf({ spot, lure: byId(LURES, 'spinner'), depth: 1.5, hour: 7 }, 'pepe-bass');
   const moving = rateOf({ spot, lure: byId(LURES, 'spinner'), depth: 1.5, hour: 7, retrieving: 0.7 }, 'pepe-bass');
   assert.ok(moving > still * 3);
@@ -55,7 +56,7 @@ test('a crankbait dives when retrieved and floats up when paused', () => {
 
 test('bites arrive at the modelled rate, not every frame', () => {
   const rng = createRng(11);
-  const rates = biteRates({ spot: byId(SPOTS, 'dock'), lure: byId(LURES, 'float'), line: LINES[0], depth: 1.2, retrieving: 0, hour: 12, weather: 'sunny' });
+  const rates = biteRates({ spot: spotById('dock'), lure: byId(LURES, 'float'), line: LINES[0], depth: 1.2, retrieving: 0, hour: 12, weather: 'sunny' });
   const total = rates.reduce((s, r) => s + r.rate, 0);
   const dt = 1 / 60;
   let waited = 0;
