@@ -18,7 +18,7 @@ const MODES = {
 
 export const lineStiffness = (rod, line) => 3.5 * (1 - 0.5 * line.stretch) * (1 - 0.45 * rod.action);
 
-export function createFight(rng, { species, weight, rod, reel, line, distance, depth = 1, bottomAt = () => 6, hookQuality = 0.8 }) {
+export function createFight(rng, { species, weight, rod, reel, line, distance, depth = 1, bottomAt = () => 6, hookQuality = 0.8, current = 0 }) {
   const fight = {
     rng,
     species,
@@ -31,6 +31,8 @@ export function createFight(rng, { species, weight, rod, reel, line, distance, d
     k: lineStiffness(rod, line),
     // Big fish pull harder, but not linearly with weight.
     power: Math.pow(weight, 0.8) * species.fight.power,
+    // River current adds a steady pull on top of the fish's own.
+    currentPull: current * Math.sqrt(weight) * 0.6,
     fishDist: distance,
     fishDepth: depth,
     fishVel: 0,
@@ -104,7 +106,7 @@ function substep(f, input, h) {
   if (f.result) return;
 
   // Fish
-  const thrust = f.power * MODES[f.mode].thrust * staminaF;
+  const thrust = f.power * MODES[f.mode].thrust * staminaF + (f.mode === 'toward' ? 0 : f.currentPull);
   const accelScale = G / (f.weight * 1.6 + 0.1);
   const vmax = sp.vmax * (0.4 + 0.6 * f.stamina);
   const waterDrag = (f.power * accelScale) / vmax;

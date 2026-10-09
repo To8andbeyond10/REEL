@@ -19,6 +19,7 @@ export const SPECIES = [
     wariness: 0.2,
     price: 40,
     fight: { power: 2.24, endurance: 0.6, vmax: 1.6, run: 0.35, hold: 0.25, shake: 0.2, dive: 0.1, jump: 0.02, toward: 0.08, shakeAmp: 0.6 },
+    model: { deep: 0.42 },
     caption: 'Much fish. Very bluegill. Wow.'
   },
   {
@@ -95,6 +96,7 @@ export const SPECIES = [
     wariness: 0.3,
     price: 30,
     fight: { power: 1.54, endurance: 1.4, vmax: 1.8, run: 0.35, hold: 0.3, shake: 0.05, dive: 0.3, jump: 0, toward: 0.03, shakeAmp: 0.4 },
+    model: { deep: 0.2, barbels: true },
     caption: 'Only goes up (from the bottom of the lake).'
   },
   {
@@ -115,25 +117,168 @@ export const SPECIES = [
     price: 85,
     fight: { power: 1.82, endurance: 1.6, vmax: 3.2, run: 0.35, hold: 0.15, shake: 0.25, dive: 0.12, jump: 0.08, toward: 0.05, shakeAmp: 0.8 },
     caption: 'The fish of ten thousand casts. Screenshot it.'
+  },
+  {
+    id: 'wojak-bowfin',
+    name: 'Wojak Bowfin',
+    ticker: 'WOJAK',
+    real: 'bowfin',
+    color: '#5d6b3c',
+    belly: '#c9c79a',
+    rarity: 'common',
+    weight: { min: 0.8, median: 2, max: 6 },
+    lengthK: 0.45,
+    depth: [0.4, 3],
+    time: 'dawnDusk',
+    weather: { sunny: 0.9, cloudy: 1.1, rain: 1.2, storm: 1.2, fog: 1.1 },
+    lures: { float: 0.6, minnow: 0.9, spinner: 0.4, jig: 0.7, popper: 0.6, crank: 0.3, bottom: 0.6 },
+    wariness: 0.2,
+    price: 26,
+    fight: { power: 2.3, endurance: 1.2, vmax: 2.2, run: 0.35, hold: 0.2, shake: 0.3, dive: 0.15, jump: 0.02, toward: 0.05, shakeAmp: 0.9 },
+    model: { deep: 0.24 },
+    caption: 'It is over. (It was not over. You caught it.)'
+  },
+  {
+    id: 'rugpull-gar',
+    name: 'Rugpull Gar',
+    ticker: 'RUGGR',
+    real: 'alligator gar',
+    color: '#6f7a52',
+    belly: '#d8d3b0',
+    rarity: 'legendary',
+    weight: { min: 6, median: 14, max: 40 },
+    lengthK: 0.62,
+    depth: [0.5, 4],
+    time: 'day',
+    weather: { sunny: 1.1, cloudy: 1, rain: 0.9, storm: 0.8, fog: 1 },
+    lures: { minnow: 1, bottom: 0.7, crank: 0.5, popper: 0.3, spinner: 0.2, jig: 0.2, float: 0.2 },
+    wariness: 0.8,
+    price: 70,
+    fight: { power: 1.2, endurance: 1.8, vmax: 3, run: 0.4, hold: 0.25, shake: 0.2, dive: 0.05, jump: 0.1, toward: 0.04, shakeAmp: 0.7 },
+    model: { deep: 0.15, snout: 0.45, length: 1.2 },
+    caption: 'Looked like a log. Then it pulled the liquidity.'
+  },
+  {
+    id: 'sol-steelhead',
+    name: 'SOL Steelhead',
+    ticker: 'SOLST',
+    real: 'steelhead',
+    color: '#8fa3b5',
+    belly: '#f1d9da',
+    rarity: 'uncommon',
+    weight: { min: 1, median: 3, max: 9 },
+    lengthK: 0.46,
+    depth: [0.8, 4],
+    time: 'morning',
+    weather: { sunny: 0.7, cloudy: 1.3, rain: 1.4, storm: 1.1, fog: 1.2 },
+    lures: { spinner: 1, crank: 0.8, minnow: 0.7, float: 0.5, jig: 0.4, popper: 0.1, bottom: 0.3 },
+    wariness: 0.75,
+    price: 75,
+    fight: { power: 2.4, endurance: 1.1, vmax: 3.4, run: 0.45, hold: 0.1, shake: 0.25, dive: 0.05, jump: 0.14, toward: 0.06, shakeAmp: 0.85 },
+    model: { deep: 0.24 },
+    caption: 'Fast, cheap and went offline twice mid-fight.'
+  },
+  {
+    id: 'satoshi-sturgeon',
+    name: 'Satoshi Sturgeon',
+    ticker: 'SATS',
+    real: 'white sturgeon',
+    color: '#6c6a62',
+    belly: '#e3dfd2',
+    rarity: 'legendary',
+    weight: { min: 10, median: 22, max: 60 },
+    lengthK: 0.58,
+    depth: [3, 9],
+    time: 'night',
+    weather: { sunny: 0.8, cloudy: 1, rain: 1.2, storm: 1.3, fog: 1.1 },
+    lures: { bottom: 1, minnow: 0.3, float: 0.1, jig: 0.05 },
+    wariness: 0.6,
+    price: 60,
+    fight: { power: 1, endurance: 2.2, vmax: 2.2, run: 0.4, hold: 0.35, shake: 0.08, dive: 0.1, jump: 0.03, toward: 0.03, shakeAmp: 0.5 },
+    model: { deep: 0.17, snout: 0.2, barbels: true, scutes: true, length: 1.25 },
+    caption: 'Nobody knows who it really is. Ancient, massive, anonymous.'
+  },
+  {
+    id: 'floki-pike',
+    name: 'Floki Pike',
+    ticker: 'FLOKI',
+    real: 'northern pike',
+    color: '#5f7a45',
+    belly: '#e8e6c4',
+    rarity: 'uncommon',
+    weight: { min: 1, median: 3, max: 12 },
+    lengthK: 0.5,
+    depth: [0.5, 5],
+    time: 'day',
+    weather: { sunny: 1, cloudy: 1.2, rain: 1, snow: 1.1, fog: 1 },
+    lures: { spinner: 1, crank: 0.8, minnow: 0.9, popper: 0.5, jig: 0.5, float: 0.2, bottom: 0.1 },
+    wariness: 0.4,
+    price: 45,
+    fight: { power: 1.8, endurance: 1, vmax: 3, run: 0.35, hold: 0.15, shake: 0.35, dive: 0.05, jump: 0.06, toward: 0.06, shakeAmp: 1 },
+    model: { deep: 0.2, snout: 0.15, length: 1.1 },
+    caption: 'Viking teeth. Bit through two leaders and a dream.'
+  },
+  {
+    id: 'ledger-laker',
+    name: 'Ledger Laker',
+    ticker: 'LEDGR',
+    real: 'lake trout',
+    color: '#6f7d86',
+    belly: '#e6e8e3',
+    rarity: 'uncommon',
+    weight: { min: 1, median: 3.5, max: 15 },
+    lengthK: 0.48,
+    depth: [7, 18],
+    time: 'morning',
+    weather: { sunny: 0.9, cloudy: 1.1, snow: 1.2, fog: 1 },
+    lures: { jig: 1, bottom: 0.8, minnow: 0.7, crank: 0.6, spinner: 0.4, float: 0.2 },
+    wariness: 0.5,
+    price: 55,
+    fight: { power: 1.6, endurance: 1.3, vmax: 2.4, run: 0.3, hold: 0.3, shake: 0.15, dive: 0.3, jump: 0, toward: 0.04, shakeAmp: 0.6 },
+    model: { deep: 0.22 },
+    caption: 'Stored deep and cold. Hardware-wallet grade.'
+  },
+  {
+    id: 'diamond-char',
+    name: 'Diamond Char',
+    ticker: 'DCHAR',
+    real: 'arctic char',
+    color: '#6d7f8c',
+    belly: '#ff8a5c',
+    rarity: 'legendary',
+    weight: { min: 3, median: 6, max: 14 },
+    lengthK: 0.48,
+    depth: [3, 12],
+    time: 'dawnDusk',
+    weather: { sunny: 0.7, cloudy: 1.2, snow: 1.3, fog: 1.2 },
+    lures: { jig: 1, spinner: 0.8, minnow: 0.8, crank: 0.5, bottom: 0.3, float: 0.2 },
+    wariness: 0.85,
+    price: 110,
+    fight: { power: 1.7, endurance: 1.5, vmax: 3, run: 0.4, hold: 0.15, shake: 0.25, dive: 0.1, jump: 0.05, toward: 0.05, shakeAmp: 0.8 },
+    model: { deep: 0.24 },
+    caption: 'Diamond hands, diamond flanks, zero sell pressure.'
   }
 ];
 
 export const RODS = [
   { id: 'rod-paper', name: 'Paper Hands UL 1.8m', maxLoad: 3.5, action: 0.8, cast: 30, price: 0, level: 1, blurb: 'Soft and forgiving. Bends if a gill sneezes.' },
   { id: 'rod-diamond', name: 'Diamond Hands M 2.1m', maxLoad: 7, action: 0.55, cast: 42, price: 250, level: 2, blurb: 'All-rounder for bass and trout.' },
-  { id: 'rod-whale', name: 'Whale Hunter H 2.4m', maxLoad: 16, action: 0.35, cast: 52, price: 1200, level: 5, blurb: 'Stiff, long and built for whales.' }
+  { id: 'rod-whale', name: 'Whale Hunter H 2.4m', maxLoad: 16, action: 0.35, cast: 52, price: 1200, level: 5, blurb: 'Stiff, long and built for whales.' },
+  { id: 'rod-satoshi', name: 'Satoshi Surf XH 3.6m', maxLoad: 32, action: 0.3, cast: 70, price: 4000, level: 7, blurb: 'A surf stick for sturgeon and gar. Casts into next week.' }
 ];
 
 export const REELS = [
   { id: 'reel-starter', name: 'Starter 2000', maxDrag: 3, speed: 1.2, capacity: 120, power: 4, price: 0, level: 1, blurb: 'Gets the job done on small fish.' },
   { id: 'reel-moon', name: 'Moonshot 3000', maxDrag: 6, speed: 1.5, capacity: 160, power: 8, price: 300, level: 2, blurb: 'Smooth drag, faster retrieve.' },
-  { id: 'reel-cold', name: 'Cold Storage 5000', maxDrag: 13, speed: 1.7, capacity: 220, power: 18, price: 1400, level: 5, blurb: 'Locks up like a hardware wallet.' }
+  { id: 'reel-cold', name: 'Cold Storage 5000', maxDrag: 13, speed: 1.7, capacity: 220, power: 18, price: 1400, level: 5, blurb: 'Locks up like a hardware wallet.' },
+  { id: 'reel-hodl', name: 'HODL 8000', maxDrag: 26, speed: 1.9, capacity: 380, power: 36, price: 4500, level: 7, blurb: 'Big-game reel. Never lets go.' }
 ];
 
 export const LINES = [
   { id: 'line-mono6', name: 'Mono 6 lb', strength: 2.7, stretch: 0.7, visibility: 0.4, price: 0, level: 1, blurb: 'Stretchy and cheap.' },
   { id: 'line-fluoro10', name: 'Fluoro 10 lb', strength: 4.5, stretch: 0.45, visibility: 0.1, price: 120, level: 2, blurb: 'Nearly invisible. Wary fish bite more.' },
-  { id: 'line-braid30', name: 'HODL Braid 30 lb', strength: 13.6, stretch: 0.05, visibility: 0.7, price: 400, level: 4, blurb: 'Huge strength, zero stretch. Shakes hit hard.' }
+  { id: 'line-braid30', name: 'HODL Braid 30 lb', strength: 13.6, stretch: 0.05, visibility: 0.7, price: 400, level: 4, blurb: 'Huge strength, zero stretch. Shakes hit hard.' },
+  { id: 'line-ledger65', name: 'Ledger Braid 65 lb', strength: 29.5, stretch: 0.04, visibility: 0.8, price: 900, level: 6, blurb: 'Rope, basically. For fish that outweigh your dog.' }
 ];
 
 // kind: float (hangs at the float depth), bottom (lies on the bottom),
@@ -144,35 +289,15 @@ export const LURES = [
   { id: 'jig', name: 'Bag Holder Jig', kind: 'lure', sink: 0.9, dive: 0.5, idealSpeed: 0.4, pauseAppeal: 0.9, price: 60, level: 1, blurb: 'Let it sink, hop it, pause. Bites on the drop.' },
   { id: 'popper', name: 'Rug Pull Popper', kind: 'lure', sink: -1, dive: 0, idealSpeed: 0.45, pauseAppeal: 0.6, topwater: true, price: 90, level: 2, blurb: 'Topwater. Pop, pause, explosion.' },
   { id: 'bottom', name: 'Stinky Bags Bottom Rig', kind: 'bottom', price: 80, level: 2, blurb: 'Sits on the bottom. Catfish cannot resist.' },
-  { id: 'crank', name: 'Bull Crank 3m', kind: 'lure', sink: -0.3, dive: 3.2, idealSpeed: 1, pauseAppeal: 0.1, price: 220, level: 3, blurb: 'Dives deep on a fast retrieve. Whale food.' }
+  { id: 'crank', name: 'Bull Crank 3m', kind: 'lure', sink: -0.3, dive: 3.2, idealSpeed: 1, pauseAppeal: 0.1, price: 220, level: 3, blurb: 'Dives deep on a fast retrieve. Whale food.' },
+  { id: 'minnow', name: 'Live Minnow Float Rig', kind: 'float', price: 40, level: 2, blurb: 'A live minnow under a float. Predators only: pike, gar, char, steelhead.' }
 ];
 
-export const SPOTS = [
-  {
-    id: 'dock',
-    name: 'Old Dock',
-    blurb: 'Shallow to medium water off the end of the dock.',
-    level: 1,
-    price: 0,
-    density: { 'doge-gill': 1, 'bonk-perch': 0.7, 'pepe-bass': 0.4, 'shiba-trout': 0.2, 'stonks-cat': 0.45, 'whale-of-gains': 0.03 }
-  },
-  {
-    id: 'reeds',
-    name: 'Reed Bay',
-    blurb: 'Weedy shallows. Bass country.',
-    level: 2,
-    price: 150,
-    density: { 'doge-gill': 0.8, 'bonk-perch': 0.4, 'pepe-bass': 1, 'shiba-trout': 0.1, 'stonks-cat': 0.3, 'whale-of-gains': 0.05 }
-  },
-  {
-    id: 'point',
-    name: 'Deep Point',
-    blurb: 'A rocky point dropping into the deepest water.',
-    level: 3,
-    price: 400,
-    density: { 'doge-gill': 0.2, 'bonk-perch': 0.6, 'pepe-bass': 0.3, 'shiba-trout': 0.8, 'stonks-cat': 0.8, 'whale-of-gains': 0.09 }
-  }
+// Gadgets you own rather than equip.
+export const ELECTRONICS = [
+  { id: 'finder', name: 'Moonscope Fish Finder', price: 350, level: 2, blurb: 'Sonar on your HUD: the bottom, your lure and fish arcs along your cast line.' }
 ];
+
 
 export const byId = (list, id) => list.find((item) => item.id === id);
 export const speciesById = (id) => byId(SPECIES, id);

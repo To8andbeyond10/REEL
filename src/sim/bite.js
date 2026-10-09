@@ -35,11 +35,17 @@ function actionMatch(lure, retrieving) {
   return Math.exp(-((ratio - 1) ** 2) / 0.5);
 }
 
-// Bites per second for each species right now.
-export function biteRates({ spot, lure, line, depth, retrieving, hour, weather, sentimentBite = 1 }) {
+// Weather the species tables don't mention.
+const WEATHER_DEFAULT = { storm: 0.75, fog: 1.05, snow: 0.9 };
+
+// Bites per second for each species right now. eventMult(speciesId) folds in live events.
+export function biteRates({ spot, lure, line, depth, retrieving, hour, weather, sentimentBite = 1, eventMult = () => 1 }) {
+  // Fog hides the line from wary fish.
+  const lineShow = weather === 'fog' ? 0.4 : 1;
   return SPECIES.map((s) => {
     const density = spot.density[s.id] || 0;
-    const visibility = 1 - line.visibility * s.wariness * 0.6;
+    if (!density) return { species: s, rate: 0 };
+    const visibility = 1 - line.visibility * s.wariness * 0.6 * lineShow;
     const rate =
       BASE_RATE *
       density *
@@ -47,9 +53,10 @@ export function biteRates({ spot, lure, line, depth, retrieving, hour, weather, 
       depthMatch(s, depth) *
       actionMatch(lure, retrieving) *
       timeMultiplier(s.time, hour) *
-      (s.weather[weather] ?? 1) *
+      (s.weather[weather] ?? WEATHER_DEFAULT[weather] ?? 1) *
       visibility *
-      sentimentBite;
+      sentimentBite *
+      eventMult(s.id);
     return { species: s, rate };
   });
 }
