@@ -73,7 +73,8 @@ export function stepDerby(d, minute, rng) {
   if (!derbyActive(d, minute)) return;
   const water = waterById(d.water);
   const pool = {};
-  for (const s of water.spots) for (const [id, dens] of Object.entries(s.density)) pool[id] = (pool[id] || 0) + dens;
+  // Rivals land legendaries far less often than their density suggests: they have the wrong gear too.
+  for (const s of water.spots) for (const [id, dens] of Object.entries(s.density)) pool[id] = (pool[id] || 0) + dens * (speciesById(id).rarity === 'legendary' ? 0.25 : 1);
   const entries = Object.entries(pool).map(([value, weight]) => ({ value, weight }));
   for (const r of d.rivals) {
     if (rng() < 0.012 * r.skill) {

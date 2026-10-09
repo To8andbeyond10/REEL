@@ -10,11 +10,16 @@
     <canvas id="application"></canvas>
 
     <div id="hud" class="hud hidden">
-      <div class="panel top-left">
-        <div class="clock"><strong id="clock">06:00</strong><span id="day">Day 1</span></div>
-        <div class="row"><span id="weather">Sunny</span><span id="temp">18°C</span></div>
-        <div class="row muted"><span id="spot-name">Genesis Lake · Old Dock</span></div>
-        <div class="row" id="ff-row"></div>
+      <div class="left-stack">
+        <div class="panel top-left">
+          <div class="clock"><strong id="clock">06:00</strong><span id="day">Day 1</span></div>
+          <div class="row"><span id="weather">Sunny</span><span id="temp">18°C</span></div>
+          <div class="row muted"><span id="forecast"></span></div>
+          <div class="row muted"><span id="spot-name">Genesis Lake · Old Dock</span></div>
+          <div class="row" id="ff-row"></div>
+        </div>
+        <div id="events" class="events"></div>
+        <div id="derby" class="panel derby hidden"></div>
       </div>
 
       <div class="ticker"><div class="ticker-track" id="ticker"></div></div>
@@ -44,16 +49,19 @@
         </div>
       </div>
 
-      <div class="panel gear">
-        <div class="gear-line"><span class="label">Rod</span><span id="g-rod"></span></div>
-        <div class="gear-line"><span class="label">Reel</span><span id="g-reel"></span></div>
-        <div class="gear-line"><span class="label">Line</span><span id="g-line"></span></div>
-        <div class="gear-line"><span class="label">Rig</span><span id="g-lure"></span></div>
-        <div class="settings">
-          <div><span class="label">Drag</span><strong id="g-drag">1.2 kg</strong></div>
-          <div><span class="label">Reel speed</span><strong id="g-speed">3/5</strong></div>
-          <div><span class="label" id="g-depth-label">Lure depth</span><strong id="g-depth">0 m</strong></div>
-          <div><span class="label">Distance</span><strong id="g-dist">0 m</strong></div>
+      <div class="right-stack">
+        <canvas id="sonar" class="sonar hidden" width="250" height="120"></canvas>
+        <div class="panel gear">
+          <div class="gear-line"><span class="label">Rod</span><span id="g-rod"></span></div>
+          <div class="gear-line"><span class="label">Reel</span><span id="g-reel"></span></div>
+          <div class="gear-line"><span class="label">Line</span><span id="g-line"></span></div>
+          <div class="gear-line"><span class="label">Rig</span><span id="g-lure"></span></div>
+          <div class="settings">
+            <div><span class="label">Drag</span><strong id="g-drag">1.2 kg</strong></div>
+            <div><span class="label">Reel speed</span><strong id="g-speed">3/5</strong></div>
+            <div><span class="label" id="g-depth-label">Lure depth</span><strong id="g-depth">0 m</strong></div>
+            <div><span class="label">Distance</span><strong id="g-dist">0 m</strong></div>
+          </div>
         </div>
       </div>
 
@@ -61,9 +69,11 @@
         <button data-panel="tackle">Tackle <kbd>T</kbd></button>
         <button data-panel="market">Market <kbd>B</kbd></button>
         <button data-panel="map">Map <kbd>M</kbd></button>
+        <button data-panel="missions">Missions <kbd>O</kbd></button>
         <button data-panel="journal">Journal <kbd>J</kbd></button>
         <button data-panel="help">Help <kbd>H</kbd></button>
         <button id="ff-button">Time ×20 <kbd>Z</kbd></button>
+        <button id="photo-button">Photo <kbd>P</kbd></button>
         <button id="mute-button">Sound</button>
       </nav>
 
@@ -81,11 +91,17 @@
       </div>
     </div>
 
+    <div id="photo-bar" class="photo-bar">
+      <span>Photo mode · look around with the mouse</span>
+      <button id="photo-snap" class="primary">Snap <kbd>Space</kbd></button>
+      <button id="photo-exit">Exit <kbd>P</kbd></button>
+    </div>
+
     <section id="title" class="screen">
       <div class="title-card">
         <p class="eyebrow">A fishing sim with a memecoin twist</p>
         <h1>MEMEFISHING</h1>
-        <p class="lede">Read the water, rig the right gear, play the drag. Every fish is a coin and the fish market never sleeps.</p>
+        <p class="lede">Four waters, live whale alerts, derbies and a fish market that never sleeps. Read the water, rig the right gear, play the drag.</p>
         <button id="start-button" class="primary">Start fishing</button>
         <div class="controls-grid">
           <span>Aim</span><span>Mouse / A D</span>
@@ -95,6 +111,7 @@
           <span>Drag</span><span>Mouse wheel or [ ]</span>
           <span>Reel speed</span><span>W / S</span>
           <span>Float depth</span><span>Q / E</span>
+          <span>Missions, map, photo</span><span>O / M / P</span>
         </div>
         <p class="fine">MEME is an in-game currency only. No wallets, tokens or real money.</p>
       </div>

@@ -212,8 +212,9 @@ export const WATERS = [
     }),
     weather: { sunny: 1.5, cloudy: 2, rain: 1.6, storm: 0.6, fog: 1.6 },
     palette: {
-      water: [[0.27, 0.3, 0.17], [0.15, 0.19, 0.12]],
-      opacity: 0.93,
+      water: [[0.08, 0.09, 0.05], [0.035, 0.05, 0.03]],
+      opacity: 0.95,
+      reflect: 0.45,
       mud: [0.13, 0.12, 0.08],
       sand: [0.33, 0.3, 0.2],
       grass: [0.26, 0.33, 0.14],
@@ -297,13 +298,13 @@ export const WATERS = [
     }),
     weather: { sunny: 2.5, cloudy: 2, rain: 1.1, storm: 0.3, fog: 0.7 },
     palette: {
-      water: [[0.34, 0.45, 0.42], [0.12, 0.27, 0.3]],
-      opacity: 0.8,
+      water: [[0.26, 0.4, 0.34], [0.07, 0.21, 0.24]],
+      opacity: 0.86,
       mud: [0.3, 0.29, 0.25],
       sand: [0.52, 0.49, 0.42],
       grass: [0.3, 0.4, 0.18],
-      grassHigh: [0.42, 0.38, 0.32],
-      rock: [0.47, 0.44, 0.4],
+      grassHigh: [0.5, 0.42, 0.33],
+      rock: [0.58, 0.46, 0.36],
       snow: 0,
       fog: 0.9,
       skyTint: [1, 1, 1.02],
@@ -509,15 +510,18 @@ export function forward(yaw) {
   return { x: -Math.sin(yaw), z: -Math.cos(yaw) };
 }
 
-// Where a cast of `distance` metres at `yaw` lands; pulled back so it lands in water.
+// Where a cast of `distance` metres at `yaw` lands: pulled back, then swung toward the spot's
+// facing, until it lands in water.
 export function castLanding(water, pose, yaw, distance) {
-  const f = forward(yaw);
-  let dist = distance;
-  while (dist > 2) {
-    const x = pose.x + f.x * dist;
-    const z = pose.z + f.z * dist;
-    if (water.shape.depthAt(x, z) > 0.3) return { x, z, dist };
-    dist -= 1;
+  for (let k = 0; k <= 10; k += 1) {
+    const y = yaw + (pose.yaw - yaw) * (k / 10);
+    const f = forward(y);
+    for (let dist = distance; dist > 2; dist -= 1) {
+      const x = pose.x + f.x * dist;
+      const z = pose.z + f.z * dist;
+      if (water.shape.depthAt(x, z) > 0.3) return { x, z, dist, yaw: y };
+    }
   }
-  return { x: pose.x + f.x * 2, z: pose.z + f.z * 2, dist: 2 };
+  const f = forward(pose.yaw);
+  return { x: pose.x + f.x * 2, z: pose.z + f.z * 2, dist: 2, yaw: pose.yaw };
 }

@@ -40,3 +40,20 @@ test('fights last long enough to be a fight', () => {
   const r = run('pepe-bass', 1.4, 'mid', 'skilled');
   assert.ok(r.avgTime > 15 && r.avgTime < 90, `avg ${r.avgTime}`);
 });
+
+const BIG = { rod: RODS[3], reel: REELS[3], line: LINES[3] };
+const runKit = (id, weight, kit, opts = {}) => winRate({ species: speciesById(id), weight, ...kit, policy: 'skilled', ...opts }, 80);
+
+test('legendaries snap mid gear and need the heavy or big-game kit', () => {
+  assert.equal(runKit('satoshi-sturgeon', 22, KITS.mid).rate, 0);
+  assert.equal(runKit('rugpull-gar', 14, KITS.mid).rate, 0);
+  assert.ok(runKit('satoshi-sturgeon', 35, KITS.heavy).rate < 0.3, 'trophy sturgeon on heavy gear');
+  assert.ok(runKit('satoshi-sturgeon', 35, BIG).rate > 0.85);
+  assert.ok(runKit('rugpull-gar', 14, BIG).rate > 0.8);
+});
+
+test('river current makes the same fish harder to land', () => {
+  const still = runKit('sol-steelhead', 3, KITS.mid);
+  const river = runKit('sol-steelhead', 3, KITS.mid, { current: 0.8 });
+  assert.ok(river.rate < still.rate || river.avgTime > still.avgTime * 1.2, `still ${JSON.stringify(still)} river ${JSON.stringify(river)}`);
+});

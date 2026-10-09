@@ -154,7 +154,7 @@ export const SPECIES = [
     lures: { minnow: 1, bottom: 0.7, crank: 0.5, popper: 0.3, spinner: 0.2, jig: 0.2, float: 0.2 },
     wariness: 0.8,
     price: 70,
-    fight: { power: 1.2, endurance: 1.8, vmax: 3, run: 0.4, hold: 0.25, shake: 0.2, dive: 0.05, jump: 0.1, toward: 0.04, shakeAmp: 0.7 },
+    fight: { power: 1.75, endurance: 1.8, vmax: 3, run: 0.4, hold: 0.25, shake: 0.2, dive: 0.05, jump: 0.1, toward: 0.04, shakeAmp: 0.7 },
     model: { deep: 0.15, snout: 0.45, length: 1.2 },
     caption: 'Looked like a log. Then it pulled the liquidity.'
   },
@@ -194,7 +194,7 @@ export const SPECIES = [
     lures: { bottom: 1, minnow: 0.3, float: 0.1, jig: 0.05 },
     wariness: 0.6,
     price: 60,
-    fight: { power: 1, endurance: 2.2, vmax: 2.2, run: 0.4, hold: 0.35, shake: 0.08, dive: 0.1, jump: 0.03, toward: 0.03, shakeAmp: 0.5 },
+    fight: { power: 1.6, endurance: 2.2, vmax: 2.2, run: 0.4, hold: 0.35, shake: 0.08, dive: 0.1, jump: 0.03, toward: 0.03, shakeAmp: 0.5 },
     model: { deep: 0.17, snout: 0.2, barbels: true, scutes: true, length: 1.25 },
     caption: 'Nobody knows who it really is. Ancient, massive, anonymous.'
   },
@@ -254,7 +254,7 @@ export const SPECIES = [
     lures: { jig: 1, spinner: 0.8, minnow: 0.8, crank: 0.5, bottom: 0.3, float: 0.2 },
     wariness: 0.85,
     price: 110,
-    fight: { power: 1.7, endurance: 1.5, vmax: 3, run: 0.4, hold: 0.15, shake: 0.25, dive: 0.1, jump: 0.05, toward: 0.05, shakeAmp: 0.8 },
+    fight: { power: 2.4, endurance: 1.5, vmax: 3, run: 0.4, hold: 0.15, shake: 0.25, dive: 0.1, jump: 0.05, toward: 0.05, shakeAmp: 0.8 },
     model: { deep: 0.24 },
     caption: 'Diamond hands, diamond flanks, zero sell pressure.'
   }

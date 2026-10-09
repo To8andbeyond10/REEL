@@ -1,5 +1,5 @@
 // Missions: three contracts per water at a time, refilled as you finish them.
-import { LURES, byId, speciesById } from './data.js';
+import { LURES, speciesById } from './data.js';
 import { speciesIn, waterById } from './waters.js';
 import { range } from './random.js';
 
@@ -105,4 +105,3 @@ export const missionLabel = (m) => {
   return `${m.progress}/${m.target}`;
 };
 
-export const lureName = (id) => byId(LURES, id)?.name;
