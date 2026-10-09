@@ -17,9 +17,17 @@ npm install
 npm run dev
 ```
 
+## Tests
+
+```bash
+npm test
+```
+
+The fishing rules live in `src/fishing.js` with no rendering code, so `test/fishing.test.js` can simulate thousands of fights to check the balance.
+
 ## Controls
 
 - **Cast:** button or `Space`
 - **Hook:** button or `Space` during a bite
-- **Reel:** hold the reel button or hold `Space`
+- **Reel:** hold the reel button or hold `Space`. Reel while the fish rests and let go when the bobber twitches: holding through a surge snaps the line.
 - **Pause:** button or `P`

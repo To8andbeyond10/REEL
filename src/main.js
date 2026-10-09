@@ -1,61 +1,8 @@
 import * as pc from 'playcanvas';
-
-const FISH_TYPES = [
-  {
-    name: 'Bubble Bass',
-    color: '#66d9ff',
-    reward: 8,
-    progressRate: 18,
-    slipRate: 7,
-    tensionRate: 22,
-    biteDelay: [1.5, 3.8],
-    reelWindow: 10
-  },
-  {
-    name: 'Doge Darter',
-    color: '#ffd166',
-    reward: 14,
-    progressRate: 17,
-    slipRate: 9,
-    tensionRate: 26,
-    biteDelay: [1.4, 3.4],
-    reelWindow: 11
-  },
-  {
-    name: 'Shiba Snapper',
-    color: '#ff8f70',
-    reward: 20,
-    progressRate: 15,
-    slipRate: 10,
-    tensionRate: 30,
-    biteDelay: [1.3, 3.2],
-    reelWindow: 11
-  },
-  {
-    name: 'Pepe Pike',
-    color: '#7ae582',
-    reward: 28,
-    progressRate: 14,
-    slipRate: 11,
-    tensionRate: 34,
-    biteDelay: [1.2, 2.9],
-    reelWindow: 12
-  },
-  {
-    name: 'Whale of Gains',
-    color: '#cba6ff',
-    reward: 45,
-    progressRate: 12,
-    slipRate: 13,
-    tensionRate: 38,
-    biteDelay: [1.0, 2.6],
-    reelWindow: 12
-  }
-];
+import { createFight, pickFish, stepFight } from './fishing.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const lerp = (a, b, t) => a + (b - a) * t;
-const pick = (items) => items[Math.floor(Math.random() * items.length)];
 
 class ReelGame {
   constructor(canvas) {
@@ -76,6 +23,7 @@ class ReelGame {
     this.createScene();
     this.cacheDom();
     this.bindDom();
+    this.bindFocusLoss();
     this.bindResize();
     this.resetSession();
     this.showMenu();
@@ -188,7 +136,7 @@ class ReelGame {
     const entity = new pc.Entity('fish');
     entity.addComponent('render', {
       type: 'cone',
-      material: this.createMaterial(new pc.Color(0.6, 0.85, 1))
+      material: this.createMaterial(new pc.Color(0.05, 0.16, 0.32), 0.85)
     });
     entity.setLocalScale(0.55, 0.95, 0.35);
     entity.setLocalEulerAngles(90, 0, 90);
@@ -232,6 +180,7 @@ class ReelGame {
       progressValue: document.getElementById('progress-value'),
       tensionBar: document.getElementById('tension-bar'),
       tensionValue: document.getElementById('tension-value'),
+      tensionMeter: document.getElementById('tension-bar').parentElement,
       gameoverSummary: document.getElementById('gameover-summary')
     };
   }
@@ -261,10 +210,16 @@ class ReelGame {
     this.ui.reel.addEventListener('pointercancel', stopReel);
 
     window.addEventListener('keydown', (event) => {
+      if (event.code === 'Space') {
+        event.preventDefault();
+      }
+      // Auto-repeat from a held key must not cast, hook or toggle anything.
+      if (event.repeat) {
+        return;
+      }
       if (event.code === 'Enter' && this.menu) {
         this.startSession();
       } else if (event.code === 'Space') {
-        event.preventDefault();
         if (this.state === 'idle') {
           this.castLine();
         } else if (this.state === 'bite') {
@@ -280,6 +235,21 @@ class ReelGame {
     window.addEventListener('keyup', (event) => {
       if (event.code === 'Space') {
         this.reelHeld = false;
+      }
+    });
+  }
+
+  bindFocusLoss() {
+    // A keyup or pointerup that happens in another window never reaches us,
+    // so drop the reel and pause whenever the game loses focus.
+    const suspend = () => {
+      this.reelHeld = false;
+      this.togglePause(true);
+    };
+    window.addEventListener('blur', suspend);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        suspend();
       }
     });
   }
@@ -316,7 +286,8 @@ class ReelGame {
     this.castClock = 0;
     this.waitClock = 0;
     this.hookWindow = 0;
-    this.reelClock = 0;
+    this.fight = null;
+    this.fishRevealed = false;
     this.tension = 0;
     this.progress = 0;
     this.score = 0;
@@ -340,7 +311,7 @@ class ReelGame {
     this.paused = false;
     this.ui.pauseOverlay.classList.add('hidden');
     this.ui.gameoverOverlay.classList.add('hidden');
-    this.setMessage('REEL', 'Start a 90 second session. Cast, wait for the bite, hook fast, then only reel while the tension settles.');
+    this.setMessage('REEL', 'Start a 90 second session. Cast, wait for the bite and hook fast. Reel while the fish rests, and let go when it twitches before a surge.');
     this.state = 'menu';
     this.refreshUi();
   }
@@ -352,6 +323,8 @@ class ReelGame {
     this.ui.gameoverOverlay.classList.add('hidden');
     this.state = 'idle';
     this.currentFish = null;
+    this.fight = null;
+    this.fishRevealed = false;
     this.score = 0;
     this.streak = 0;
     this.catches = 0;
@@ -364,7 +337,7 @@ class ReelGame {
     this.bobber.setPosition(this.bobberStart);
     this.bobberTip.setPosition(this.bobberStart.clone().add(new pc.Vec3(0, 0.15, 0.1)));
     this.fish.enabled = false;
-    this.setMessage('Lines in the water', 'Press cast to send the bobber out. When a fish bites, hook immediately, then hold reel only while the tension bar is calm.');
+    this.setMessage('Lines in the water', 'Press cast to send the bobber out. When a fish bites, hook immediately. Then reel while it rests and let go when it surges, or the line snaps.');
     this.refreshUi();
     this.syncLine();
   }
@@ -389,17 +362,18 @@ class ReelGame {
       return;
     }
 
-    this.currentFish = pick(FISH_TYPES);
+    this.currentFish = pickFish();
+    this.fight = null;
+    this.fishRevealed = false;
     this.castClock = 0;
     this.waitClock = this.randomRange(...this.currentFish.biteDelay);
     this.hookWindow = 0;
-    this.reelClock = this.currentFish.reelWindow;
-    this.progress = 6;
-    this.tension = 14;
+    this.progress = 0;
+    this.tension = 0;
     this.castTargetX = this.randomRange(1.6, 3.5);
     this.castTargetY = this.randomRange(-1.7, -0.75);
     this.state = 'casting';
-    this.setMessage('Cast away', `The ${this.currentFish.name} is somewhere below. Watch the bobber and get ready to hook.`);
+    this.setMessage('Cast away', 'Something is down there. Watch the bobber and get ready to hook.');
     this.refreshUi();
   }
 
@@ -410,11 +384,10 @@ class ReelGame {
 
     this.state = 'reeling';
     this.reelHeld = false;
-    this.progress = clamp(this.progress + 8, 0, 100);
-    this.setMessage(
-      `${this.currentFish.name} hooked`,
-      'Hold reel while tension is low. If you yank during a surge, the line will snap.'
-    );
+    this.fight = createFight(this.currentFish);
+    this.progress = this.fight.progress;
+    this.tension = this.fight.tension;
+    this.setMessage('Fish on!', 'Hold reel while it rests. When the bobber twitches, let go before it surges.');
     this.refreshUi();
   }
 
@@ -432,6 +405,8 @@ class ReelGame {
     }
 
     this.reelHeld = false;
+    this.fight = null;
+    this.fishRevealed = true;
     this.resultCooldown = 1.7;
     this.state = 'result';
     this.setMessage(title, body);
@@ -505,39 +480,29 @@ class ReelGame {
     if (this.waitClock <= 0) {
       this.state = 'bite';
       this.hookWindow = 1.85;
-      this.setMessage('Bite!', `${this.currentFish.name} is nibbling. Hit hook before it spits the lure.`);
+      this.setMessage('Bite!', 'Something is nibbling. Hit hook before it spits the lure.');
     }
   }
 
   updateBite(dt) {
     this.hookWindow -= dt;
-    this.progress = clamp(this.progress - 5 * dt, 0, 100);
     if (this.hookWindow <= 0) {
-      this.settleResult('Missed the strike', `${this.currentFish.name} stole the bait and disappeared into the weeds.`);
+      this.settleResult('Missed the strike', `A ${this.currentFish.name} stole the bait and disappeared into the weeds.`);
     }
   }
 
   updateReeling(dt) {
-    this.reelClock -= dt;
-    const fightWave = (Math.sin(this.elapsed * 3.1 + this.currentFish.reward) + 1) * 0.5;
-    const calmBonus = 1 - fightWave;
-    this.tension += (28 + fightWave * this.currentFish.tensionRate - this.tension) * dt * 1.35;
+    const fight = this.fight;
+    const previousPhase = fight.phase;
+    const outcome = stepFight(fight, this.reelHeld, dt);
+    this.progress = fight.progress;
+    this.tension = fight.tension;
+    const name = this.currentFish.name;
 
-    if (this.reelHeld) {
-      this.progress += (this.currentFish.progressRate + calmBonus * 12) * dt;
-      this.tension += (8 + fightWave * this.currentFish.tensionRate) * dt;
-    } else {
-      this.progress -= (this.currentFish.slipRate + fightWave * 3.5) * dt;
-      this.tension -= 18 * dt;
-    }
-
-    this.progress = clamp(this.progress, 0, 100);
-    this.tension = clamp(this.tension, 0, 100);
-
-    if (this.progress >= 100) {
+    if (outcome === 'caught') {
       const bonus = Math.round(this.currentFish.reward * (1 + this.streak * 0.08));
       this.settleResult(
-        `Caught ${this.currentFish.name}`,
+        `Caught a ${name}!`,
         `Clean catch. You banked ${bonus} meme coins and kept the streak alive.`,
         bonus,
         bonus,
@@ -546,13 +511,24 @@ class ReelGame {
       return;
     }
 
-    if (this.tension >= 100) {
-      this.settleResult('Line snapped', `${this.currentFish.name} surged too hard. Ease off the reel during the red zone.`);
+    if (outcome === 'snapped') {
+      this.settleResult('Line snapped', `The ${name} surged while you were reeling. Let go when the bobber twitches.`);
       return;
     }
 
-    if (this.reelClock <= 0 || this.progress <= 0) {
-      this.settleResult('Fish escaped', `${this.currentFish.name} shook free. Keep progress up without overcooking the tension.`);
+    if (outcome === 'escaped') {
+      this.settleResult('Fish escaped', `The ${name} shook free. Keep reeling whenever it rests so it can't wear you out.`);
+      return;
+    }
+
+    if (fight.phase !== previousPhase) {
+      if (fight.phase === 'warn') {
+        this.setMessage('It\'s about to run!', 'Let go of reel now.');
+      } else if (fight.phase === 'surge') {
+        this.setMessage('Surge!', 'Hold off until it tires, or the line will snap.');
+      } else {
+        this.setMessage('It\'s tiring', 'Reel it in while it rests.');
+      }
     }
   }
 
@@ -574,8 +550,14 @@ class ReelGame {
     const floatOffset = Math.sin(this.elapsed * 3.4) * 0.06;
     if (this.state === 'waiting' || this.state === 'bite' || this.state === 'reeling') {
       let biteDip = 0;
+      const phase = this.fight ? this.fight.phase : null;
       if (this.state === 'bite') {
         biteDip = Math.sin(this.elapsed * 18) * 0.12;
+      } else if (phase === 'warn') {
+        // The twitch that telegraphs a surge.
+        biteDip = Math.sin(this.elapsed * 32) * 0.1;
+      } else if (phase === 'surge') {
+        biteDip = -0.2 + Math.sin(this.elapsed * 14) * 0.05;
       }
       this.bobber.setPosition(bobberPos.x, this.castTargetY + floatOffset + biteDip, 0);
       const tipHeight = this.state === 'bite' ? 0.11 : 0.15;
@@ -597,16 +579,13 @@ class ReelGame {
       return;
     }
 
+    // The fish stays a shadow until it is landed or lost, so its species is a surprise.
     this.fish.enabled = true;
-    const material = this.fish.render.material;
-    const color = new pc.Color().fromString(this.currentFish.color);
-    material.diffuse = color;
-    material.emissive = color.clone().mulScalar(0.14);
-    material.update();
 
-    const wave = Math.sin(this.elapsed * 2.8 + this.currentFish.reward);
+    const surging = this.fight && this.fight.phase === 'surge';
+    const wave = Math.sin(this.elapsed * (surging ? 7 : 2.8) + this.currentFish.reward);
     const biteBoost = this.state === 'bite' ? 0.42 : 0;
-    const reelBoost = this.state === 'reeling' ? Math.sin(this.elapsed * 8) * 0.25 : 0;
+    const reelBoost = this.state === 'reeling' ? Math.sin(this.elapsed * (surging ? 16 : 8)) * (surging ? 0.35 : 0.2) : 0;
     const x = this.castTargetX - 0.65 + wave * 0.48;
     const y = this.castTargetY - 1.05 + biteBoost + reelBoost;
     this.fish.setPosition(x, y, 0);
@@ -647,12 +626,19 @@ class ReelGame {
     this.ui.coins.textContent = String(visibleCoins);
     this.ui.bestScore.textContent = String(Math.max(this.save.bestScore, visibleScore));
     this.ui.sessionTimer.textContent = `${Math.ceil(this.sessionTime)}s`;
-    this.ui.fishLabel.textContent = this.currentFish ? this.currentFish.name : '—';
+    if (!this.currentFish) {
+      this.ui.fishLabel.textContent = '—';
+    } else {
+      this.ui.fishLabel.textContent = this.fishRevealed ? this.currentFish.name : '???';
+    }
     this.ui.streakLabel.textContent = String(this.streak);
     this.ui.progressValue.textContent = `${Math.round(this.progress)}%`;
     this.ui.progressBar.style.width = `${this.progress}%`;
     this.ui.tensionValue.textContent = `${Math.round(this.tension)}%`;
     this.ui.tensionBar.style.width = `${this.tension}%`;
+    const phase = this.fight ? this.fight.phase : null;
+    this.ui.tensionMeter.classList.toggle('warn', phase === 'warn');
+    this.ui.tensionMeter.classList.toggle('surge', phase === 'surge');
     this.ui.stateLabel.textContent = this.describeState();
 
     this.ui.start.disabled = !this.menu;
@@ -679,7 +665,10 @@ class ReelGame {
       case 'bite':
         return 'Hook now';
       case 'reeling':
-        return 'Reeling';
+        if (this.fight && this.fight.phase === 'warn') {
+          return 'Let go!';
+        }
+        return this.fight && this.fight.phase === 'surge' ? 'Surging' : 'Reeling';
       case 'result':
         return 'Recovering';
       case 'gameover':

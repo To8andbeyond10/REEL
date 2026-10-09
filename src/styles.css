@@ -249,3 +249,21 @@ body {
     min-width: 0;
   }
 }
+
+.meter.warn {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.meter.surge {
+  box-shadow: 0 0 0 2px var(--danger);
+  animation: surge-pulse 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes surge-pulse {
+  from {
+    background: rgba(255, 107, 129, 0.15);
+  }
+  to {
+    background: rgba(255, 107, 129, 0.4);
+  }
+}
