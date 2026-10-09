@@ -1,698 +1,842 @@
+// Memefishing: first-person fishing sim. Wires the sim rules (src/sim) to the 3D lake and HUD (src/game).
 import * as pc from 'playcanvas';
+import { LakeScene } from './game/scene.js';
+import { Effects, FloatBobber, Lure, Rod, buildFish } from './game/rig.js';
+import { Ui } from './game/ui.js';
+import { Sound } from './game/audio.js';
+import { SPECIES, SPOTS, byId } from './sim/data.js';
+import { SPOT_POSES, castLanding, depthAt, forward } from './sim/lake.js';
+import { biteCue, biteRates, createBite, lengthCm, rollBite, rollWeight, stepBite, stepLureDepth, strike, trophyRank } from './sim/bite.js';
+import { RESULT_TEXT, createFight, fightReadout, stepFight } from './sim/fight.js';
+import { SENTIMENT, createMarket, quote, stepMarket } from './sim/market.js';
+import { createWorld, daylight, hourOf, stepWorld } from './sim/world.js';
+import { ALL_GEAR, BAG_SIZE, buy, catchXp, gear, levelOf, loadProfile, recordCatch, repairCost, saveProfile, travel } from './sim/profile.js';
+import { clamp, createRng } from './sim/random.js';
 
-const FISH_TYPES = [
-  {
-    name: 'Bubble Bass',
-    color: '#66d9ff',
-    reward: 8,
-    progressRate: 18,
-    slipRate: 7,
-    tensionRate: 22,
-    biteDelay: [1.5, 3.8],
-    reelWindow: 10
-  },
-  {
-    name: 'Doge Darter',
-    color: '#ffd166',
-    reward: 14,
-    progressRate: 17,
-    slipRate: 9,
-    tensionRate: 26,
-    biteDelay: [1.4, 3.4],
-    reelWindow: 11
-  },
-  {
-    name: 'Shiba Snapper',
-    color: '#ff8f70',
-    reward: 20,
-    progressRate: 15,
-    slipRate: 10,
-    tensionRate: 30,
-    biteDelay: [1.3, 3.2],
-    reelWindow: 11
-  },
-  {
-    name: 'Pepe Pike',
-    color: '#7ae582',
-    reward: 28,
-    progressRate: 14,
-    slipRate: 11,
-    tensionRate: 34,
-    biteDelay: [1.2, 2.9],
-    reelWindow: 12
-  },
-  {
-    name: 'Whale of Gains',
-    color: '#cba6ff',
-    reward: 45,
-    progressRate: 12,
-    slipRate: 13,
-    tensionRate: 38,
-    biteDelay: [1.0, 2.6],
-    reelWindow: 12
-  }
-];
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const lerp = (a, b, t) => a + (b - a) * t;
-const pick = (items) => items[Math.floor(Math.random() * items.length)];
+const LINE_COLORS = {
+  'line-mono6': new pc.Color(0.9, 0.92, 0.9, 0.8),
+  'line-fluoro10': new pc.Color(0.95, 0.8, 0.85, 0.6),
+  'line-braid30': new pc.Color(0.85, 1, 0.2, 0.95)
+};
 
-class ReelGame {
+class Game {
   constructor(canvas) {
-    this.canvas = canvas;
-    this.elapsed = 0;
-    this.menu = true;
-    this.paused = false;
-    this.reelHeld = false;
-    this.resultCooldown = 0;
-    this.castDuration = 0.75;
-    this.bobberStart = new pc.Vec3(-4.1, -0.5, 0);
-    this.bobberTarget = new pc.Vec3(2.7, -1.2, 0);
-    this.fishBase = new pc.Vec3(2.7, -2.2, 0);
-    this.storageKey = 'reel-save-v1';
-    this.save = this.loadSave();
+    this.rng = createRng(Date.now() & 0xffffffff);
+    this.storage = (() => {
+      try {
+        return window.localStorage;
+      } catch {
+        return null;
+      }
+    })();
+    this.profile = loadProfile(this.storage);
+    this.world = createWorld(this.rng, 6 * 60 + 30);
+    this.market = createMarket(this.rng);
+    stepMarket(this.market, 90); // some price history before the first look
+    this.state = 'title';
+    this.input = { primary: false, secondary: false, primaryEdge: false, secondaryEdge: false, primaryUp: false };
+    this.aim = { yaw: 0, pitch: -0.1, keys: 0 };
+    this.reelGear = 3;
+    this.drag = 0;
+    this.fastForward = false;
+    this.minuteAcc = 0;
+    this.envMinute = -1;
+    this.lure = { active: false, x: 0, z: 0, depth: 0, dist: 0, dir: { x: 0, z: -1 }, settled: 0, hop: 0, flight: null };
+    this.castPower = 0;
+    this.fish = null;
+    this.fishModels = {};
+    this.hudTimer = 0;
+    this.whip = 0;
 
-    this.createApp();
-    this.createScene();
-    this.cacheDom();
-    this.bindDom();
-    this.bindResize();
-    this.resetSession();
-    this.showMenu();
-    this.app.on('update', (dt) => this.update(dt));
-  }
-
-  createApp() {
-    this.app = new pc.Application(this.canvas, {
-      mouse: new pc.Mouse(this.canvas),
-      touch: pc.platform.touch ? new pc.TouchDevice(this.canvas) : undefined
+    this.app = new pc.Application(canvas, {
+      mouse: new pc.Mouse(canvas),
+      touch: pc.platform.touch ? new pc.TouchDevice(canvas) : undefined,
+      graphicsDeviceOptions: { antialias: true }
     });
-
-    this.app.start();
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
-    this.app.scene.ambientLight = new pc.Color(0.72, 0.78, 0.92);
-    this.app.scene.gammaCorrection = pc.GAMMA_SRGB;
-    this.app.scene.toneMapping = pc.TONEMAP_ACES;
+    this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio, 2);
+    this.app.start();
+
+    this.camera = new pc.Entity('camera');
+    this.camera.addComponent('camera', { fov: 62, nearClip: 0.05, farClip: 1500, clearColor: new pc.Color(0.5, 0.7, 0.9) });
+    this.camera.camera.toneMapping = pc.TONEMAP_ACES;
+    this.camera.camera.gammaCorrection = pc.GAMMA_SRGB;
+    this.app.root.addChild(this.camera);
+
+    this.scene = new LakeScene(this.app);
+    this.rod = new Rod(this.camera);
+    this.floatModel = new FloatBobber(this.app);
+    this.lureModel = new Lure(this.app);
+    this.effects = new Effects(this.app);
+    for (const s of SPECIES) this.fishModels[s.id] = buildFish(this.app, s);
+    this.sound = new Sound();
+    this.ui = new Ui(this);
+
+    this.resetDrag();
+    this.bindInput(canvas);
+    window.addEventListener('resize', () => this.app.resizeCanvas());
+    this.app.on('update', (dt) => this.update(dt));
+    this.placeCamera(0);
+    this.updateEnvironment(true);
+    this.title();
   }
 
-  createScene() {
-    const camera = new pc.Entity('camera');
-    camera.addComponent('camera', {
-      clearColor: new pc.Color(0.42, 0.78, 1),
-      projection: pc.PROJECTION_ORTHOGRAPHIC,
-      orthoHeight: 5
-    });
-    camera.setLocalPosition(0, 0, 10);
-    this.app.root.addChild(camera);
-    this.camera = camera;
-
-    const light = new pc.Entity('light');
-    light.addComponent('light', {
-      type: 'directional',
-      intensity: 1.45,
-      castShadows: false
-    });
-    light.setEulerAngles(35, -55, 0);
-    this.app.root.addChild(light);
-
-    this.water = this.createBox('water', new pc.Color(0.1, 0.42, 0.82), new pc.Vec3(8.5, 4.9, 0.2), new pc.Vec3(1.4, -1.7, -0.2));
-    this.bank = this.createBox('bank', new pc.Color(0.38, 0.3, 0.18), new pc.Vec3(3.8, 5.6, 0.3), new pc.Vec3(-5.2, -0.3, 0));
-    this.rod = this.createCapsuleLikeRod();
-    this.bobber = this.createSphere('bobber', new pc.Color(1, 0.97, 0.95), 0.23, this.bobberStart.clone());
-    this.bobberTip = this.createSphere('bobber-tip', new pc.Color(1, 0.32, 0.32), 0.12, this.bobberStart.clone().add(new pc.Vec3(0, 0.15, 0.1)));
-    this.fish = this.createConeFish();
-    this.line = this.createLine();
-    this.sun = this.createSphere('sun', new pc.Color(1, 0.92, 0.4), 0.48, new pc.Vec3(-1.1, 3.25, -1));
+  get gear() {
+    return gear(this.profile);
+  }
+  get pose() {
+    return SPOT_POSES[this.profile.spot];
+  }
+  get spot() {
+    return byId(SPOTS, this.profile.spot);
+  }
+  get rodBroken() {
+    return this.profile.brokenRod === this.profile.loadout.rod;
+  }
+  get reelSpeed() {
+    return (this.gear.reel.speed * this.reelGear) / 5;
   }
 
-  createMaterial(color, opacity = 1) {
-    const material = new pc.StandardMaterial();
-    material.diffuse = color.clone();
-    material.emissive = color.clone().mulScalar(0.08);
-    material.opacity = opacity;
-    if (opacity < 1) {
-      material.blendType = pc.BLEND_NORMAL;
-    }
-    material.update();
-    return material;
+  resetDrag() {
+    const { line, reel } = this.gear;
+    this.drag = Math.min(reel.maxDrag, Math.round(line.strength * 0.5 * 10) / 10);
   }
 
-  createBox(name, color, scale, position) {
-    const entity = new pc.Entity(name);
-    entity.addComponent('render', {
-      type: 'box',
-      material: this.createMaterial(color)
-    });
-    entity.setLocalScale(scale);
-    entity.setLocalPosition(position);
-    this.app.root.addChild(entity);
-    return entity;
+  save() {
+    saveProfile(this.storage, this.profile);
   }
 
-  createSphere(name, color, radius, position) {
-    const entity = new pc.Entity(name);
-    entity.addComponent('render', {
-      type: 'sphere',
-      material: this.createMaterial(color)
+  title() {
+    document.getElementById('start-button').addEventListener('click', () => {
+      this.sound.unlock();
+      this.ui.showHud();
+      this.state = 'idle';
+      if (pc.platform.touch) document.getElementById('touch').classList.remove('hidden');
+      if (this.profile.stats.caught === 0) this.ui.open('help');
     });
-    entity.setLocalScale(radius, radius, radius);
-    entity.setLocalPosition(position);
-    this.app.root.addChild(entity);
-    return entity;
   }
 
-  createCapsuleLikeRod() {
-    const entity = new pc.Entity('rod');
-    entity.addComponent('render', {
-      type: 'cylinder',
-      material: this.createMaterial(new pc.Color(0.18, 0.12, 0.08))
-    });
-    entity.setLocalScale(0.12, 2.6, 0.12);
-    entity.setLocalEulerAngles(0, 0, 32);
-    entity.setLocalPosition(-4.55, 0.75, 0.05);
-    this.app.root.addChild(entity);
-
-    const reel = new pc.Entity('reel');
-    reel.addComponent('render', {
-      type: 'sphere',
-      material: this.createMaterial(new pc.Color(0.92, 0.86, 0.55))
-    });
-    reel.setLocalScale(0.3, 0.3, 0.2);
-    reel.setLocalPosition(-4.05, -0.35, 0.18);
-    this.app.root.addChild(reel);
-    return entity;
-  }
-
-  createConeFish() {
-    const entity = new pc.Entity('fish');
-    entity.addComponent('render', {
-      type: 'cone',
-      material: this.createMaterial(new pc.Color(0.6, 0.85, 1))
-    });
-    entity.setLocalScale(0.55, 0.95, 0.35);
-    entity.setLocalEulerAngles(90, 0, 90);
-    entity.setLocalPosition(this.fishBase);
-    entity.enabled = false;
-    this.app.root.addChild(entity);
-    return entity;
-  }
-
-  createLine() {
-    const entity = new pc.Entity('line');
-    entity.addComponent('render', {
-      type: 'box',
-      material: this.createMaterial(new pc.Color(0.96, 0.98, 1), 0.95)
-    });
-    this.app.root.addChild(entity);
-    return entity;
-  }
-
-  cacheDom() {
-    this.ui = {
-      start: document.getElementById('start-button'),
-      cast: document.getElementById('cast-button'),
-      hook: document.getElementById('hook-button'),
-      reel: document.getElementById('reel-button'),
-      pause: document.getElementById('pause-button'),
-      resume: document.getElementById('resume-button'),
-      replay: document.getElementById('replay-button'),
-      pauseOverlay: document.getElementById('pause-overlay'),
-      gameoverOverlay: document.getElementById('gameover-overlay'),
-      messageTitle: document.getElementById('message-title'),
-      messageBody: document.getElementById('message-body'),
-      sessionTimer: document.getElementById('session-timer'),
-      score: document.getElementById('score'),
-      coins: document.getElementById('coins'),
-      bestScore: document.getElementById('best-score'),
-      stateLabel: document.getElementById('state-label'),
-      fishLabel: document.getElementById('fish-label'),
-      streakLabel: document.getElementById('streak-label'),
-      progressBar: document.getElementById('progress-bar'),
-      progressValue: document.getElementById('progress-value'),
-      tensionBar: document.getElementById('tension-bar'),
-      tensionValue: document.getElementById('tension-value'),
-      gameoverSummary: document.getElementById('gameover-summary')
+  // ---------- input ----------
+  bindInput(canvas) {
+    const down = (which) => {
+      this.sound.unlock();
+      if (!this.input[which]) this.input[`${which}Edge`] = true;
+      this.input[which] = true;
     };
-  }
-
-  bindDom() {
-    this.ui.start.addEventListener('click', () => this.startSession());
-    this.ui.cast.addEventListener('click', () => this.castLine());
-    this.ui.hook.addEventListener('click', () => this.hookFish());
-    this.ui.pause.addEventListener('click', () => this.togglePause());
-    this.ui.resume.addEventListener('click', () => this.togglePause(false));
-    this.ui.replay.addEventListener('click', () => this.startSession());
-
-    const startReel = (event) => {
-      event.preventDefault();
-      if (this.state === 'reeling') {
-        this.reelHeld = true;
-      }
+    const up = (which) => {
+      if (which === 'primary' && this.input.primary) this.input.primaryUp = true;
+      this.input[which] = false;
     };
-
-    const stopReel = () => {
-      this.reelHeld = false;
-    };
-
-    this.ui.reel.addEventListener('pointerdown', startReel);
-    this.ui.reel.addEventListener('pointerup', stopReel);
-    this.ui.reel.addEventListener('pointerleave', stopReel);
-    this.ui.reel.addEventListener('pointercancel', stopReel);
-
-    window.addEventListener('keydown', (event) => {
-      if (event.code === 'Enter' && this.menu) {
-        this.startSession();
-      } else if (event.code === 'Space') {
-        event.preventDefault();
-        if (this.state === 'idle') {
-          this.castLine();
-        } else if (this.state === 'bite') {
-          this.hookFish();
-        } else if (this.state === 'reeling') {
-          this.reelHeld = true;
-        }
-      } else if (event.key.toLowerCase() === 'p' && !this.menu && this.state !== 'gameover') {
-        this.togglePause();
-      }
-    });
-
-    window.addEventListener('keyup', (event) => {
-      if (event.code === 'Space') {
-        this.reelHeld = false;
-      }
-    });
-  }
-
-  bindResize() {
-    const resize = () => this.app.resizeCanvas();
-    window.addEventListener('resize', resize);
-    resize();
-  }
-
-  loadSave() {
-    try {
-      const raw = window.localStorage.getItem(this.storageKey);
-      if (!raw) {
-        return { totalCoins: 0, bestScore: 0 };
-      }
-      const parsed = JSON.parse(raw);
-      return {
-        totalCoins: Number.isFinite(parsed.totalCoins) ? parsed.totalCoins : 0,
-        bestScore: Number.isFinite(parsed.bestScore) ? parsed.bestScore : 0
-      };
-    } catch {
-      return { totalCoins: 0, bestScore: 0 };
-    }
-  }
-
-  persistSave() {
-    window.localStorage.setItem(this.storageKey, JSON.stringify(this.save));
-  }
-
-  resetSession() {
-    this.state = 'menu';
-    this.currentFish = null;
-    this.castClock = 0;
-    this.waitClock = 0;
-    this.hookWindow = 0;
-    this.reelClock = 0;
-    this.tension = 0;
-    this.progress = 0;
-    this.score = 0;
-    this.streak = 0;
-    this.catches = 0;
-    this.sessionCoins = 0;
-    this.sessionTime = 90;
-    this.resultCooldown = 0;
-    this.reelHeld = false;
-    this.castTargetX = this.bobberTarget.x;
-    this.castTargetY = this.bobberTarget.y;
-    this.bobber.setPosition(this.bobberStart);
-    this.bobberTip.setPosition(this.bobberStart.clone().add(new pc.Vec3(0, 0.15, 0.1)));
-    this.fish.enabled = false;
-    this.refreshUi();
-    this.syncLine();
-  }
-
-  showMenu() {
-    this.menu = true;
-    this.paused = false;
-    this.ui.pauseOverlay.classList.add('hidden');
-    this.ui.gameoverOverlay.classList.add('hidden');
-    this.setMessage('REEL', 'Start a 90 second session. Cast, wait for the bite, hook fast, then only reel while the tension settles.');
-    this.state = 'menu';
-    this.refreshUi();
-  }
-
-  startSession() {
-    this.menu = false;
-    this.paused = false;
-    this.ui.pauseOverlay.classList.add('hidden');
-    this.ui.gameoverOverlay.classList.add('hidden');
-    this.state = 'idle';
-    this.currentFish = null;
-    this.score = 0;
-    this.streak = 0;
-    this.catches = 0;
-    this.sessionCoins = 0;
-    this.sessionTime = 90;
-    this.tension = 0;
-    this.progress = 0;
-    this.resultCooldown = 0;
-    this.reelHeld = false;
-    this.bobber.setPosition(this.bobberStart);
-    this.bobberTip.setPosition(this.bobberStart.clone().add(new pc.Vec3(0, 0.15, 0.1)));
-    this.fish.enabled = false;
-    this.setMessage('Lines in the water', 'Press cast to send the bobber out. When a fish bites, hook immediately, then hold reel only while the tension bar is calm.');
-    this.refreshUi();
-    this.syncLine();
-  }
-
-  togglePause(force) {
-    if (this.menu || this.state === 'gameover') {
-      return;
-    }
-
-    this.paused = typeof force === 'boolean' ? force : !this.paused;
-    this.ui.pauseOverlay.classList.toggle('hidden', !this.paused);
-    this.refreshUi();
-  }
-
-  setMessage(title, body) {
-    this.ui.messageTitle.textContent = title;
-    this.ui.messageBody.textContent = body;
-  }
-
-  castLine() {
-    if (this.state !== 'idle' || this.paused) {
-      return;
-    }
-
-    this.currentFish = pick(FISH_TYPES);
-    this.castClock = 0;
-    this.waitClock = this.randomRange(...this.currentFish.biteDelay);
-    this.hookWindow = 0;
-    this.reelClock = this.currentFish.reelWindow;
-    this.progress = 6;
-    this.tension = 14;
-    this.castTargetX = this.randomRange(1.6, 3.5);
-    this.castTargetY = this.randomRange(-1.7, -0.75);
-    this.state = 'casting';
-    this.setMessage('Cast away', `The ${this.currentFish.name} is somewhere below. Watch the bobber and get ready to hook.`);
-    this.refreshUi();
-  }
-
-  hookFish() {
-    if (this.state !== 'bite' || this.paused) {
-      return;
-    }
-
-    this.state = 'reeling';
-    this.reelHeld = false;
-    this.progress = clamp(this.progress + 8, 0, 100);
-    this.setMessage(
-      `${this.currentFish.name} hooked`,
-      'Hold reel while tension is low. If you yank during a surge, the line will snap.'
-    );
-    this.refreshUi();
-  }
-
-  settleResult(title, body, scoreDelta = 0, coinDelta = 0, caught = false) {
-    if (caught) {
-      this.catches += 1;
-      this.streak += 1;
-      this.score += scoreDelta;
-      this.sessionCoins += coinDelta;
-      this.save.totalCoins += coinDelta;
-      this.save.bestScore = Math.max(this.save.bestScore, this.score);
-      this.persistSave();
-    } else {
-      this.streak = 0;
-    }
-
-    this.reelHeld = false;
-    this.resultCooldown = 1.7;
-    this.state = 'result';
-    this.setMessage(title, body);
-    this.fish.enabled = false;
-    this.refreshUi();
-  }
-
-  endSession() {
-    this.reelHeld = false;
-    this.menu = false;
-    this.state = 'gameover';
-    this.save.bestScore = Math.max(this.save.bestScore, this.score);
-    this.persistSave();
-    this.ui.gameoverSummary.textContent = `Score ${this.score} • Catches ${this.catches} • Coins banked ${this.sessionCoins}`;
-    this.ui.gameoverOverlay.classList.remove('hidden');
-    this.setMessage('Session complete', 'Nice run. Cash in your haul and jump back in for another session.');
-    this.refreshUi();
-  }
-
-  update(dt) {
-    this.elapsed += dt;
-    if (this.menu || this.paused) {
-      this.animateBackdrop(dt);
-      return;
-    }
-
-    this.animateBackdrop(dt);
-
-    if (this.state !== 'gameover') {
-      this.sessionTime = Math.max(0, this.sessionTime - dt);
-      if (this.sessionTime === 0) {
-        this.endSession();
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('pointerdown', (e) => {
+      if (this.blocked) return;
+      if (e.pointerType === 'touch') {
+        this.touchLook = { x: e.clientX, y: e.clientY, yaw: this.aim.yaw, pitch: this.aim.pitch };
         return;
       }
-    }
+      down(e.button === 2 ? 'secondary' : 'primary');
+    });
+    window.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'touch') {
+        this.touchLook = null;
+        return;
+      }
+      up(e.button === 2 ? 'secondary' : 'primary');
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (this.blocked) return;
+      if (e.pointerType === 'touch') {
+        if (!this.touchLook) return;
+        this.aim.yaw = clamp(this.touchLook.yaw - (e.clientX - this.touchLook.x) * 0.004, -1, 1);
+        this.aim.pitch = clamp(this.touchLook.pitch - (e.clientY - this.touchLook.y) * 0.003, -0.5, 0.2);
+        return;
+      }
+      const nx = e.clientX / window.innerWidth - 0.5;
+      const ny = e.clientY / window.innerHeight - 0.5;
+      this.aim.yaw = clamp(-nx * 1.9, -1, 1);
+      this.aim.pitch = clamp(-ny * 0.7 - 0.1, -0.5, 0.2);
+    });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.adjustDrag(e.deltaY < 0 ? 0.1 : -0.1);
+    }, { passive: false });
 
-    if (this.state === 'casting') {
-      this.updateCasting(dt);
-    } else if (this.state === 'waiting') {
-      this.updateWaiting(dt);
-    } else if (this.state === 'bite') {
-      this.updateBite(dt);
-    } else if (this.state === 'reeling') {
-      this.updateReeling(dt);
-    } else if (this.state === 'result') {
-      this.updateResult(dt);
-    }
+    window.addEventListener('keydown', (e) => {
+      if (this.state === 'title') return;
+      const k = e.code;
+      if (k === 'Escape') {
+        if (this.ui.modalOpen) this.ui.close();
+        return;
+      }
+      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyH: 'help' };
+      if (panels[k]) {
+        if (this.ui.panel === panels[k]) this.ui.close();
+        else this.ui.open(panels[k]);
+        return;
+      }
+      if (this.blocked) return;
+      if (e.repeat) return;
+      if (k === 'Space') {
+        e.preventDefault();
+        down('primary');
+      } else if (k === 'KeyF') down('secondary');
+      else if (k === 'KeyW') this.reelGear = Math.min(5, this.reelGear + 1);
+      else if (k === 'KeyS') this.reelGear = Math.max(1, this.reelGear - 1);
+      else if (k === 'BracketRight' || k === 'Equal') this.adjustDrag(0.1);
+      else if (k === 'BracketLeft' || k === 'Minus') this.adjustDrag(-0.1);
+      else if (k === 'KeyE') this.setFloatDepth(this.profile.floatDepth + 0.2);
+      else if (k === 'KeyQ') this.setFloatDepth(this.profile.floatDepth - 0.2);
+      else if (k === 'KeyZ') this.toggleFastForward();
+      else if (k === 'KeyA') this.aim.keys = 1;
+      else if (k === 'KeyD') this.aim.keys = -1;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') up('primary');
+      else if (e.code === 'KeyF') up('secondary');
+      else if (e.code === 'KeyA' || e.code === 'KeyD') this.aim.keys = 0;
+    });
+    // Losing focus releases everything so the reel never sticks on.
+    window.addEventListener('blur', () => {
+      up('primary');
+      up('secondary');
+    });
 
-    this.updateBobber(dt);
-    this.updateFish(dt);
-    this.syncLine();
-    this.refreshUi();
+    document.querySelectorAll('[data-touch]').forEach((b) => {
+      const t = b.dataset.touch;
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (t === 'primary' || t === 'secondary') down(t);
+        else if (t === 'drag-up') this.adjustDrag(0.2);
+        else if (t === 'drag-down') this.adjustDrag(-0.2);
+        else if (t === 'speed-up') this.reelGear = Math.min(5, this.reelGear + 1);
+        else if (t === 'speed-down') this.reelGear = Math.max(1, this.reelGear - 1);
+      });
+      const release = () => {
+        if (t === 'primary' || t === 'secondary') up(t);
+      };
+      b.addEventListener('pointerup', release);
+      b.addEventListener('pointercancel', release);
+      b.addEventListener('pointerleave', release);
+    });
+    document.getElementById('ff-button').addEventListener('click', () => this.toggleFastForward());
+    document.getElementById('mute-button').addEventListener('click', (e) => {
+      e.currentTarget.textContent = this.sound.toggle() ? 'Sound off' : 'Sound';
+    });
   }
 
-  updateCasting(dt) {
-    this.castClock += dt;
-    const t = clamp(this.castClock / this.castDuration, 0, 1);
-    const arc = Math.sin(t * Math.PI) * 1.1;
-    const x = lerp(this.bobberStart.x, this.castTargetX, t);
-    const y = lerp(this.bobberStart.y, this.castTargetY, t) + arc;
-    this.bobber.setPosition(x, y, 0);
-    this.bobberTip.setPosition(x, y + 0.15, 0.1);
+  get blocked() {
+    return this.state === 'title' || this.ui.modalOpen || this.state === 'catch';
+  }
+
+  adjustDrag(delta) {
+    const { reel } = this.gear;
+    this.drag = clamp(Math.round((this.drag + delta) * 10) / 10, 0.1, reel.maxDrag);
+  }
+
+  setFloatDepth(v) {
+    this.profile.floatDepth = clamp(Math.round(v * 10) / 10, 0.3, 6);
+    this.save();
+  }
+
+  toggleFastForward() {
+    if (this.state === 'fight' || this.state === 'bite') return;
+    this.fastForward = !this.fastForward;
+  }
+
+  consumeEdges() {
+    this.input.primaryEdge = false;
+    this.input.secondaryEdge = false;
+    this.input.primaryUp = false;
+  }
+
+  // ---------- menu actions ----------
+  action(name, data) {
+    const p = this.profile;
+    switch (name) {
+      case 'tab':
+        this.ui.tab = data.tab;
+        break;
+      case 'buy': {
+        const item = ALL_GEAR.find((g) => g.id === data.id);
+        if (buy(p, item)) {
+          this.sound.cash();
+          if (item.slot === 'line' || item.slot === 'reel') this.resetDrag();
+        }
+        break;
+      }
+      case 'equip':
+        p.loadout[data.slot] = data.id;
+        if (data.slot === 'line' || data.slot === 'reel') this.resetDrag();
+        this.reelIn();
+        break;
+      case 'repair': {
+        const rod = this.gear.rod;
+        p.wallet -= Math.min(p.wallet, repairCost(rod));
+        p.brokenRod = null;
+        this.sound.cash();
+        break;
+      }
+      case 'float-depth':
+        this.setFloatDepth(Number(data.value));
+        break;
+      case 'sell':
+        this.sell([Number(data.index)]);
+        break;
+      case 'sell-all':
+        this.sell(p.bag.map((_, i) => i));
+        break;
+      case 'travel':
+        this.travelTo(data.id);
+        return;
+      case 'rest':
+        this.restUntil(Number(data.hour));
+        break;
+      case 'keep':
+      case 'release':
+      case 'dump':
+        this.finishCatch(name);
+        return;
+      default:
+        return;
+    }
+    this.save();
+    this.ui.render();
+    this.ui.hud();
+  }
+
+  sell(indices) {
+    const p = this.profile;
+    let total = 0;
+    for (const i of [...indices].sort((a, b) => b - a)) {
+      const f = p.bag[i];
+      if (!f) continue;
+      total += f.weight * quote(this.market, f.species);
+      p.bag.splice(i, 1);
+      p.stats.sold += 1;
+    }
+    total = Math.round(total);
+    p.wallet += total;
+    p.stats.earned += total;
+    if (total > 0) {
+      this.sound.cash();
+      this.ui.toast(`+${total} MEME`, 'good');
+    }
+  }
+
+  travelTo(id) {
+    if (!travel(this.profile, id)) return;
+    this.ui.close();
+    this.reelIn();
+    this.ui.fade(true);
+    setTimeout(() => {
+      this.advanceMinutes(20);
+      this.aim.yaw = 0;
+      this.placeCamera(0);
+      this.ui.fade(false);
+      this.ui.toast(this.spot.name);
+    }, 450);
+    this.save();
+  }
+
+  restUntil(hour) {
+    const now = hourOf(this.world);
+    let delta = hour - now;
+    if (delta <= 0.05) delta += 24;
+    this.reelIn();
+    this.ui.fade(true);
+    setTimeout(() => {
+      this.advanceMinutes(Math.round(delta * 60));
+      this.ui.fade(false);
+      this.ui.render();
+    }, 450);
+  }
+
+  advanceMinutes(minutes) {
+    stepWorld(this.world, minutes);
+    stepMarket(this.market, Math.min(minutes, 1440));
+    this.updateEnvironment(true);
+  }
+
+  updateEnvironment(force = false) {
+    const m = Math.floor(this.world.minute);
+    if (!force && m === this.envMinute) return;
+    this.envMinute = m;
+    this.scene.setEnvironment(hourOf(this.world), this.world.weather);
+  }
+
+  // ---------- fishing loop ----------
+  reelIn() {
+    this.lure.active = false;
+    this.lure.flight = null;
+    this.floatModel.entity.enabled = false;
+    this.lureModel.entity.enabled = false;
+    this.hideFish();
+    this.bite = null;
+    this.fight = null;
+    this.state = this.state === 'title' ? 'title' : 'idle';
+    this.ui.showFight(false);
+  }
+
+  hideFish() {
+    if (this.fish?.model) this.fish.model.enabled = false;
+    this.fish = null;
+  }
+
+  castYaw() {
+    return this.pose.yaw + this.aim.yaw;
+  }
+
+  startCast() {
+    const { rod, lure } = this.gear;
+    const pose = this.pose;
+    const reach = (rod.cast * (lure.kind === 'bottom' ? 0.85 : 1) * (0.25 + 0.75 * this.castPower)) + 3;
+    const land = castLanding(pose, this.castYaw(), reach);
+    const tip = this.rod.tipPosition().clone();
+    const dir = forward(this.castYaw());
+    this.lure.dir = dir;
+    this.lure.flight = { t: 0, dur: 0.45 + land.dist / 28, from: tip, to: new pc.Vec3(land.x, 0, land.z) };
+    this.lure.dist = land.dist;
+    this.lure.x = land.x;
+    this.lure.z = land.z;
+    this.lure.active = true;
+    this.lure.depth = 0;
+    this.lure.settled = 0;
+    this.whip = 1;
+    this.state = 'flying';
+    this.sound.cast();
+    const model = lure.kind === 'float' ? this.floatModel : this.lureModel;
+    model.entity.enabled = true;
+  }
+
+  lureWorld() {
+    return new pc.Vec3(this.lure.x, -this.lure.depth, this.lure.z);
+  }
+
+  updateIdle(dt) {
+    const g = this.gear;
+    if (this.rodBroken) {
+      this.ui.prompt('Your rod is broken. Repair it in Tackle (T).');
+      return;
+    }
+    if (this.state === 'idle') {
+      this.ui.prompt(`Hold to cast · ${g.lure.name}`);
+      if (this.input.primaryEdge) {
+        this.state = 'charging';
+        this.castPower = 0;
+        this.chargeDir = 1;
+      }
+    }
+    if (this.state === 'charging') {
+      this.castPower += this.chargeDir * dt * 0.9;
+      if (this.castPower >= 1) {
+        this.castPower = 1;
+        this.chargeDir = -1;
+      } else if (this.castPower <= 0.05) {
+        this.chargeDir = 1;
+      }
+      this.ui.castMeter(this.castPower);
+      this.ui.prompt('Release to cast');
+      if (!this.input.primary) {
+        this.ui.castMeter(null);
+        this.startCast();
+      }
+    }
+  }
+
+  updateFlight(dt) {
+    const f = this.lure.flight;
+    f.t += dt;
+    const t = Math.min(1, f.t / f.dur);
+    const p = new pc.Vec3().lerp(f.from, f.to, t);
+    p.y += Math.sin(t * Math.PI) * (2 + f.from.distance(f.to) * 0.18);
+    const model = this.gear.lure.kind === 'float' ? this.floatModel : this.lureModel;
+    model.entity.setPosition(p);
+    this.flightPos = p;
+    this.ui.prompt('');
     if (t >= 1) {
+      this.lure.flight = null;
+      this.effects.splash(f.to, this.gear.lure.kind === 'bottom' ? 0.8 : 0.4);
+      this.sound.plop(this.gear.lure.kind === 'bottom' ? 1.3 : 0.7);
       this.state = 'waiting';
-      this.setMessage('Waiting...', 'Stay alert. Fish nibble fast, and the hook window is short.');
     }
   }
 
   updateWaiting(dt) {
-    this.waitClock -= dt;
-    if (this.waitClock <= 0) {
-      this.state = 'bite';
-      this.hookWindow = 1.85;
-      this.setMessage('Bite!', `${this.currentFish.name} is nibbling. Hit hook before it spits the lure.`);
+    const { lure, line } = this.gear;
+    const L = this.lure;
+    const bottom = depthAt(L.x, L.z);
+    let retrieving = this.input.primary ? this.reelSpeed : 0;
+    if (this.input.secondaryEdge && lure.kind === 'lure') {
+      L.hop = 0.35;
+      L.depth = Math.max(0, L.depth - 0.4);
+      this.effects.ripple(new pc.Vec3(L.x, 0, L.z), 0.3);
+    }
+    if (L.hop > 0) {
+      L.hop -= dt;
+      retrieving = Math.max(retrieving, lure.idealSpeed || 0);
+    }
+    if (this.input.primary) L.dist -= this.reelSpeed * dt * (lure.kind === 'bottom' ? 0.7 : 1);
+    L.x = this.pose.x + L.dir.x * L.dist;
+    L.z = this.pose.z + L.dir.z * L.dist;
+    L.depth = stepLureDepth(lure, L.depth, bottom, retrieving, this.profile.floatDepth, dt);
+    L.settled += dt;
+    L.retrieving = retrieving;
+
+    if (L.dist < 2.5 || bottom < 0.12) {
+      this.reelIn();
+      this.ui.prompt('');
+      return;
+    }
+
+    const kindHint = lure.kind === 'float' ? 'Watch the float' : lure.kind === 'bottom' ? 'Watch the rod tip' : 'Hold to retrieve, right click to hop, pause to sink';
+    this.ui.prompt(`${kindHint} · ${L.dist.toFixed(0)} m`);
+
+    const canBite = lure.kind === 'lure' ? true : L.settled > 2.5;
+    if (canBite) {
+      const rates = biteRates({
+        spot: this.spot,
+        lure,
+        line,
+        depth: L.depth,
+        retrieving,
+        hour: hourOf(this.world),
+        weather: this.world.weather,
+        sentimentBite: SENTIMENT[this.market.sentiment].bite
+      });
+      const species = rollBite(this.rng, rates, dt * (this.fastForward ? 20 : 1));
+      if (species) {
+        this.fastForward = false;
+        this.bite = createBite(this.rng, species, lure);
+        this.bite.held = 0;
+        this.bite.lastNibble = -1;
+        this.state = 'bite';
+        if (lure.kind === 'lure') this.sound.bite();
+      }
     }
   }
 
   updateBite(dt) {
-    this.hookWindow -= dt;
-    this.progress = clamp(this.progress - 5 * dt, 0, 100);
-    if (this.hookWindow <= 0) {
-      this.settleResult('Missed the strike', `${this.currentFish.name} stole the bait and disappeared into the weeds.`);
-    }
-  }
-
-  updateReeling(dt) {
-    this.reelClock -= dt;
-    const fightWave = (Math.sin(this.elapsed * 3.1 + this.currentFish.reward) + 1) * 0.5;
-    const calmBonus = 1 - fightWave;
-    this.tension += (28 + fightWave * this.currentFish.tensionRate - this.tension) * dt * 1.35;
-
-    if (this.reelHeld) {
-      this.progress += (this.currentFish.progressRate + calmBonus * 12) * dt;
-      this.tension += (8 + fightWave * this.currentFish.tensionRate) * dt;
-    } else {
-      this.progress -= (this.currentFish.slipRate + fightWave * 3.5) * dt;
-      this.tension -= 18 * dt;
-    }
-
-    this.progress = clamp(this.progress, 0, 100);
-    this.tension = clamp(this.tension, 0, 100);
-
-    if (this.progress >= 100) {
-      const bonus = Math.round(this.currentFish.reward * (1 + this.streak * 0.08));
-      this.settleResult(
-        `Caught ${this.currentFish.name}`,
-        `Clean catch. You banked ${bonus} meme coins and kept the streak alive.`,
-        bonus,
-        bonus,
-        true
-      );
-      return;
-    }
-
-    if (this.tension >= 100) {
-      this.settleResult('Line snapped', `${this.currentFish.name} surged too hard. Ease off the reel during the red zone.`);
-      return;
-    }
-
-    if (this.reelClock <= 0 || this.progress <= 0) {
-      this.settleResult('Fish escaped', `${this.currentFish.name} shook free. Keep progress up without overcooking the tension.`);
-    }
-  }
-
-  updateResult(dt) {
-    this.resultCooldown -= dt;
-    if (this.resultCooldown <= 0) {
-      this.state = 'idle';
-      this.currentFish = null;
-      this.progress = 0;
-      this.tension = 0;
-      this.bobber.setPosition(this.bobberStart);
-      this.bobberTip.setPosition(this.bobberStart.clone().add(new pc.Vec3(0, 0.15, 0.1)));
-      this.setMessage('Ready again', 'Cast again while the session timer is still ticking.');
-    }
-  }
-
-  updateBobber(dt) {
-    const bobberPos = this.bobber.getPosition();
-    const floatOffset = Math.sin(this.elapsed * 3.4) * 0.06;
-    if (this.state === 'waiting' || this.state === 'bite' || this.state === 'reeling') {
-      let biteDip = 0;
-      if (this.state === 'bite') {
-        biteDip = Math.sin(this.elapsed * 18) * 0.12;
+    const { lure } = this.gear;
+    const b = stepBite(this.bite, dt);
+    const cue = biteCue(b);
+    if (cue === 'nibble') {
+      const n = Math.floor(b.t / 0.45);
+      if (n !== b.lastNibble) {
+        b.lastNibble = n;
+        this.sound.nibble();
+        this.effects.ripple(new pc.Vec3(this.lure.x, 0, this.lure.z), 0.2);
       }
-      this.bobber.setPosition(bobberPos.x, this.castTargetY + floatOffset + biteDip, 0);
-      const tipHeight = this.state === 'bite' ? 0.11 : 0.15;
-      this.bobberTip.setPosition(bobberPos.x, this.castTargetY + floatOffset + tipHeight + biteDip, 0.1);
-    } else if (this.state === 'idle' || this.state === 'menu' || this.state === 'gameover' || this.state === 'result') {
-      this.bobber.setPosition(
-        lerp(bobberPos.x, this.bobberStart.x, clamp(dt * 4, 0, 1)),
-        lerp(bobberPos.y, this.bobberStart.y, clamp(dt * 4, 0, 1)),
-        0
-      );
-      const pos = this.bobber.getPosition();
-      this.bobberTip.setPosition(pos.x, pos.y + 0.15, 0.1);
+      this.ui.prompt(lure.kind === 'float' ? 'Nibble… wait for it' : 'Something is tapping…');
+    } else {
+      if (!b.tookOnce) {
+        b.tookOnce = true;
+        this.sound.bite();
+        this.effects.ripple(new pc.Vec3(this.lure.x, 0, this.lure.z), 0.6);
+      }
+      this.ui.prompt('STRIKE!', true);
     }
-  }
-
-  updateFish(dt) {
-    if (!this.currentFish || this.state === 'idle' || this.state === 'menu' || this.state === 'gameover' || this.state === 'result') {
-      this.fish.enabled = false;
+    // Moving lures often hook the fish by themselves if you keep reeling through the take.
+    if (lure.kind === 'lure' && cue === 'take' && this.input.primary) b.held += dt;
+    const selfHook = b.held > 0.35;
+    if (this.input.secondaryEdge || selfHook) {
+      const result = selfHook && !this.input.secondaryEdge ? { hooked: this.rng() < 0.55, quality: 0.55 } : strike(this.rng, b);
+      this.sound.strike();
+      if (result.hooked) this.startFight(b.species, result.quality);
+      else this.missBite(result.early ? 'Too early! It spooked.' : 'Missed it.');
       return;
     }
-
-    this.fish.enabled = true;
-    const material = this.fish.render.material;
-    const color = new pc.Color().fromString(this.currentFish.color);
-    material.diffuse = color;
-    material.emissive = color.clone().mulScalar(0.14);
-    material.update();
-
-    const wave = Math.sin(this.elapsed * 2.8 + this.currentFish.reward);
-    const biteBoost = this.state === 'bite' ? 0.42 : 0;
-    const reelBoost = this.state === 'reeling' ? Math.sin(this.elapsed * 8) * 0.25 : 0;
-    const x = this.castTargetX - 0.65 + wave * 0.48;
-    const y = this.castTargetY - 1.05 + biteBoost + reelBoost;
-    this.fish.setPosition(x, y, 0);
-    this.fish.setEulerAngles(90, 0, 90 + wave * 22);
-    const depthPulse = this.state === 'reeling' ? 0.62 : 0.52;
-    this.fish.setLocalScale(0.55, 0.95 + depthPulse * 0.2, 0.35);
+    if (b.done) this.missBite(lure.kind === 'float' || lure.kind === 'bottom' ? 'It stole the bait.' : 'It let go.');
   }
 
-  animateBackdrop() {
-    const waterColor = new pc.Color(
-      0.08 + Math.sin(this.elapsed * 0.6) * 0.02,
-      0.4 + Math.sin(this.elapsed * 0.8) * 0.03,
-      0.78 + Math.cos(this.elapsed * 0.5) * 0.04
-    );
-    this.water.render.material.diffuse = waterColor;
-    this.water.render.material.emissive = waterColor.clone().mulScalar(0.12);
-    this.water.render.material.update();
-
-    this.sun.setLocalPosition(-1.1 + Math.sin(this.elapsed * 0.08) * 0.16, 3.2, -1);
+  missBite(text) {
+    this.ui.toast(text, 'bad');
+    this.bite = null;
+    this.state = 'waiting';
+    this.lure.settled = 0;
   }
 
-  syncLine() {
-    const start = new pc.Vec3(-3.55, 1.95, 0.02);
-    const end = this.bobber.getPosition().clone();
-    const midpoint = start.clone().add(end).mulScalar(0.5);
-    const delta = end.clone().sub(start);
-    const length = Math.max(delta.length(), 0.001);
-    const angle = (Math.atan2(delta.y, delta.x) * 180) / Math.PI;
-    this.line.setLocalPosition(midpoint);
-    this.line.setLocalScale(length, 0.035, 0.02);
-    this.line.setLocalEulerAngles(0, 0, angle);
+  startFight(species, quality) {
+    const { rod, reel, line } = this.gear;
+    const weight = rollWeight(this.rng, species);
+    const pose = this.pose;
+    const dir = this.lure.dir;
+    const bottomAt = (dist, angle) => {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      const dx = dir.x * c - dir.z * s;
+      const dz = dir.x * s + dir.z * c;
+      return depthAt(pose.x + dx * dist, pose.z + dz * dist);
+    };
+    this.fight = createFight(this.rng, { species, weight, rod, reel, line, distance: this.lure.dist, depth: Math.max(0.3, this.lure.depth), bottomAt, hookQuality: quality });
+    this.fish = { species, weight, model: this.fishModels[species.id], jumpT: 0 };
+    const scale = (lengthCm(species, weight) / 100) * 1.05;
+    this.fish.model.setLocalScale(scale, scale, scale);
+    this.floatModel.entity.enabled = false;
+    this.lureModel.entity.enabled = false;
+    this.bite = null;
+    this.state = 'fight';
+    this.ui.showFight(true);
+    this.ui.prompt('');
   }
 
-  refreshUi() {
-    const visibleScore = Math.round(this.score);
-    const visibleCoins = this.save.totalCoins;
-    this.ui.score.textContent = String(visibleScore);
-    this.ui.coins.textContent = String(visibleCoins);
-    this.ui.bestScore.textContent = String(Math.max(this.save.bestScore, visibleScore));
-    this.ui.sessionTimer.textContent = `${Math.ceil(this.sessionTime)}s`;
-    this.ui.fishLabel.textContent = this.currentFish ? this.currentFish.name : '—';
-    this.ui.streakLabel.textContent = String(this.streak);
-    this.ui.progressValue.textContent = `${Math.round(this.progress)}%`;
-    this.ui.progressBar.style.width = `${this.progress}%`;
-    this.ui.tensionValue.textContent = `${Math.round(this.tension)}%`;
-    this.ui.tensionBar.style.width = `${this.tension}%`;
-    this.ui.stateLabel.textContent = this.describeState();
-
-    this.ui.start.disabled = !this.menu;
-    this.ui.cast.disabled = this.state !== 'idle' || this.paused;
-    this.ui.hook.disabled = this.state !== 'bite' || this.paused;
-    this.ui.reel.disabled = this.state !== 'reeling' || this.paused;
-    this.ui.pause.disabled = this.menu || this.state === 'gameover';
+  fishWorld() {
+    const f = this.fight;
+    const c = Math.cos(f.fishAngle);
+    const s = Math.sin(f.fishAngle);
+    const d = this.lure.dir;
+    const dx = d.x * c - d.z * s;
+    const dz = d.x * s + d.z * c;
+    return { pos: new pc.Vec3(this.pose.x + dx * f.fishDist, -f.fishDepth, this.pose.z + dz * f.fishDist), dx, dz };
   }
 
-  describeState() {
-    if (this.menu) {
-      return 'Menu';
+  updateFight(dt) {
+    const f = this.fight;
+    stepFight(f, { reeling: this.input.primary, reelSpeed: this.reelSpeed, lift: this.input.secondary, drag: this.drag }, dt);
+    const readout = fightReadout(f);
+    this.ui.fight(readout, f, this.drag);
+    this.sound.drag(f.dragSlipping, Math.abs(f.fishVel));
+
+    const { pos, dx, dz } = this.fishWorld();
+    const model = this.fish.model;
+    if (f.events.includes('jump')) {
+      this.fish.jumpT = 0.9;
+      this.effects.splash(pos, 1 + this.fish.weight * 0.1);
+      this.sound.plop(1.4);
     }
-    if (this.paused) {
-      return 'Paused';
+    if (this.fish.jumpT > 0) {
+      this.fish.jumpT -= dt;
+      const t = 1 - this.fish.jumpT / 0.9;
+      pos.y = Math.sin(t * Math.PI) * (0.5 + Math.min(1, this.fish.weight * 0.15));
+      if (this.fish.jumpT <= 0) this.effects.splash(pos, 0.8);
     }
-    switch (this.state) {
-      case 'idle':
-        return 'Ready to cast';
-      case 'casting':
-        return 'Casting';
-      case 'waiting':
-        return 'Waiting for bite';
-      case 'bite':
-        return 'Hook now';
-      case 'reeling':
-        return 'Reeling';
-      case 'result':
-        return 'Recovering';
-      case 'gameover':
-        return 'Session complete';
-      default:
-        return this.state;
+    model.enabled = pos.y > -1.4;
+    model.setPosition(pos);
+    const away = f.fishVel >= 0 ? 1 : -1;
+    model.lookAt(pos.x + dx * away, pos.y + (this.fish.jumpT > 0 ? 0.6 : 0), pos.z + dz * away);
+    model.rotateLocal(0, 180, Math.sin(performance.now() / 90) * 8);
+    if (f.events.includes('shake') && pos.y > -0.8) this.effects.ripple(pos, 0.5);
+    if (f.fishDepth < 0.5 && Math.random() < dt * 3) this.effects.ripple(pos, 0.3);
+    this.fishPos = pos;
+
+    if (f.result) this.endFight(f.result);
+  }
+
+  endFight(result) {
+    this.sound.drag(false, 0);
+    this.ui.showFight(false);
+    if (result === 'landed') {
+      this.state = 'catch';
+      this.sound.landed();
+      const { species, weight } = this.fish;
+      this.catchInfo = {
+        species,
+        weight,
+        length: lengthCm(species, weight),
+        trophy: trophyRank(species, weight),
+        price: quote(this.market, species.id),
+        xpKeep: catchXp(species, weight, false),
+        xpRelease: catchXp(species, weight, true),
+        bagFull: this.profile.bag.length >= BAG_SIZE
+      };
+      recordCatch(this.profile, species, weight);
+      this.save();
+      this.ui.catchCard(this.catchInfo);
+      this.input.primary = false;
+      this.input.secondary = false;
+      return;
+    }
+    if (result === 'snapped') this.sound.snap();
+    if (result === 'rod') {
+      this.sound.snap();
+      this.profile.brokenRod = this.profile.loadout.rod;
+      this.save();
+    }
+    this.ui.toast(RESULT_TEXT[result], 'bad');
+    this.reelIn();
+  }
+
+  finishCatch(choice) {
+    const info = this.catchInfo;
+    const p = this.profile;
+    const levelBefore = levelOf(p.xp);
+    if (choice === 'keep') {
+      p.bag.push({ species: info.species.id, weight: info.weight, value: Math.round(info.weight * info.price) });
+      p.xp += info.xpKeep;
+    } else if (choice === 'dump') {
+      const cash = Math.round(info.weight * quote(this.market, info.species.id) * 0.8);
+      p.wallet += cash;
+      p.stats.sold += 1;
+      p.stats.earned += cash;
+      p.xp += info.xpKeep;
+      this.sound.cash();
+    } else {
+      p.xp += info.xpRelease;
+      p.stats.released += 1;
+      this.effects.splash(new pc.Vec3(this.pose.x + this.lure.dir.x * 2.5, 0, this.pose.z + this.lure.dir.z * 2.5), 0.5);
+    }
+    const levelAfter = levelOf(p.xp);
+    this.save();
+    this.ui.hideCatch();
+    this.catchInfo = null;
+    this.reelIn();
+    if (levelAfter > levelBefore) {
+      this.sound.landed();
+      this.ui.toast(`Level ${levelAfter}! New gear in the shop`, 'good');
     }
   }
 
-  randomRange(min, max) {
-    return min + Math.random() * (max - min);
+  // ---------- per frame ----------
+  placeCamera(dt) {
+    const pose = this.pose;
+    this.aim.yaw = clamp(this.aim.yaw + this.aim.keys * dt * 0.9, -1, 1);
+    let yaw = pose.yaw + this.aim.yaw;
+    if (this.state === 'fight' && this.fishPos) {
+      const toFish = Math.atan2(-(this.fishPos.x - pose.x), -(this.fishPos.z - pose.z));
+      yaw += wrapAngle(toFish - yaw) * 0.6;
+    }
+    this.camYaw = this.camYaw === undefined || dt === 0 ? yaw : this.camYaw + wrapAngle(yaw - this.camYaw) * Math.min(1, dt * 6);
+    this.camera.setPosition(pose.x, pose.eye, pose.z);
+    this.camera.setEulerAngles((this.aim.pitch * 180) / Math.PI, (this.camYaw * 180) / Math.PI, 0);
+  }
+
+  update(rawDt) {
+    const dt = Math.min(rawDt, 0.05);
+    const paused = this.state === 'title' || this.ui.modalOpen;
+
+    if (!paused && this.state !== 'catch') {
+      const speed = this.fastForward && (this.state === 'idle' || this.state === 'waiting') ? 20 : 1;
+      if (this.state !== 'idle' && this.state !== 'waiting') this.fastForward = false;
+      this.minuteAcc += dt * speed;
+      while (this.minuteAcc >= 1) {
+        this.minuteAcc -= 1;
+        stepWorld(this.world, 1);
+        stepMarket(this.market, 1);
+      }
+      this.updateEnvironment();
+
+      switch (this.state) {
+        case 'idle':
+        case 'charging':
+          this.updateIdle(dt);
+          break;
+        case 'flying':
+          this.updateFlight(dt);
+          break;
+        case 'waiting':
+          this.updateWaiting(dt);
+          break;
+        case 'bite':
+          this.updateBite(dt);
+          break;
+        case 'fight':
+          this.updateFight(dt);
+          break;
+        default:
+          break;
+      }
+    }
+    this.consumeEdges();
+
+    this.placeCamera(dt);
+    this.scene.update(dt, this.camera.getPosition());
+    this.updateRig(dt);
+    this.effects.update(dt);
+    this.drawLine();
+    this.sound.reel(dt, (this.state === 'waiting' || this.state === 'fight') && this.input.primary && !this.fight?.reelStall ? this.reelGear / 5 : 0);
+    this.sound.ambience(dt, { day: daylight(hourOf(this.world)), rain: this.world.weather === 'rain' });
+
+    this.hudTimer -= rawDt;
+    if (this.hudTimer <= 0 && this.state !== 'title') {
+      this.hudTimer = 0.2;
+      this.ui.hud();
+      if (this.ui.panel === 'market' && this.market.minutes % 10 === 0) this.ui.render();
+    }
+  }
+
+  updateRig(dt) {
+    let load = 0;
+    let side = 0;
+    let lift = 0;
+    let twitch = 0;
+    if (this.state === 'fight' && this.fight) {
+      const r = fightReadout(this.fight);
+      load = Math.min(1.2, r.rodLoad * 1.4 + 0.08);
+      lift = this.fight.rodPos;
+      side = clamp(this.fight.fishAngle - this.aim.yaw * 0.4, -1, 1);
+    } else if (this.state === 'waiting') {
+      load = this.input.primary ? 0.06 + (this.gear.lure.kind === 'lure' ? 0.08 : 0) : 0.02;
+    } else if (this.state === 'bite') {
+      twitch = biteCue(this.bite) === 'take' ? 0.04 : 0.015;
+      load = 0.1;
+    } else if (this.state === 'charging') {
+      lift = this.castPower * 0.6;
+    }
+    this.whip = Math.max(0, this.whip - dt * 3.5);
+    const whipCurve = this.whip > 0.7 ? -(1 - this.whip) * 2 : this.whip * 0.5;
+    this.rod.update(dt, { load, side, lift, reeling: this.input.primary && this.state !== 'idle' ? this.reelGear : 0, whip: this.state === 'charging' ? -this.castPower * 0.4 : whipCurve, twitch });
+
+    // Float and lure follow the water.
+    const L = this.lure;
+    const kind = this.gear.lure.kind;
+    if (L.active && !L.flight && this.state !== 'fight') {
+      const wave = this.scene.waveHeight(L.x, L.z, this.scene.time);
+      if (kind === 'float') {
+        let y = wave + 0.02 + Math.sin(this.scene.time * 2.1) * 0.01;
+        if (this.state === 'bite') {
+          y += biteCue(this.bite) === 'take' ? -0.32 : -Math.abs(Math.sin(this.bite.t * 14)) * 0.05;
+        }
+        this.floatModel.entity.setPosition(L.x, y, L.z);
+      } else {
+        this.lureModel.entity.enabled = L.depth < 0.6;
+        this.lureModel.entity.setPosition(L.x, Math.max(-L.depth, wave - 0.03), L.z);
+        this.lureModel.entity.setEulerAngles(0, (this.castYaw() * 180) / Math.PI, 0);
+      }
+    }
+  }
+
+  drawLine() {
+    const tip = this.rod.tipPosition();
+    let end;
+    let sag = 0;
+    let under = null;
+    const L = this.lure;
+    if (this.state === 'flying' && this.flightPos) {
+      end = this.flightPos;
+      sag = 0.2;
+    } else if (this.state === 'fight' && this.fishPos) {
+      const r = fightReadout(this.fight);
+      under = this.fishPos;
+      end = new pc.Vec3(this.fishPos.x, Math.max(0, this.fishPos.y), this.fishPos.z);
+      sag = Math.max(0, 1 - r.tensionFrac * 4) * (0.15 + r.distance * 0.02);
+    } else if (L.active && (this.state === 'waiting' || this.state === 'bite')) {
+      const kind = this.gear.lure.kind;
+      const top = kind === 'float' ? this.floatModel.entity.getPosition() : new pc.Vec3(L.x, 0, L.z);
+      end = top;
+      if (kind !== 'float' && L.depth > 0.05) under = this.lureWorld();
+      sag = this.input.primary ? 0.05 : 0.25 + L.dist * 0.012;
+    } else {
+      // Lure hangs below the rod tip.
+      end = new pc.Vec3(tip.x, tip.y - 0.5, tip.z);
+    }
+    const pts = [];
+    const n = 18;
+    let prev = tip.clone();
+    for (let i = 1; i <= n; i += 1) {
+      const t = i / n;
+      const p = new pc.Vec3().lerp(tip, end, t);
+      p.y -= sag * 4 * t * (1 - t);
+      if (end.y >= -0.01) p.y = Math.max(p.y, end.y * t);
+      pts.push(prev, p);
+      prev = p;
+    }
+    if (under) pts.push(end, under);
+    const color = LINE_COLORS[this.profile.loadout.line] || LINE_COLORS['line-mono6'];
+    this.app.drawLines(pts, color, true);
   }
 }
 
-const canvas = document.getElementById('application');
-new ReelGame(canvas);
+window.game = new Game(document.getElementById('application'));
