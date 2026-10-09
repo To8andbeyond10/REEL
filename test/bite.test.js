@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { biteRates, rollWeight, strike, createBite, stepBite, stepLureDepth } from '../src/sim/bite.js';
+import { biteRates, rollBite, rollWeight, strike, createBite, stepBite, stepLureDepth } from '../src/sim/bite.js';
 import { LINES, LURES, SPOTS, SPECIES, byId, speciesById } from '../src/sim/data.js';
 import { createRng } from '../src/sim/random.js';
 
@@ -51,4 +51,21 @@ test('a crankbait dives when retrieved and floats up when paused', () => {
   assert.ok(d > 2.5);
   for (let i = 0; i < 600; i += 1) d = stepLureDepth(crank, d, 8, 0, 0, 1 / 30);
   assert.equal(d, 0);
+});
+
+test('bites arrive at the modelled rate, not every frame', () => {
+  const rng = createRng(11);
+  const rates = biteRates({ spot: byId(SPOTS, 'dock'), lure: byId(LURES, 'float'), line: LINES[0], depth: 1.2, retrieving: 0, hour: 12, weather: 'sunny' });
+  const total = rates.reduce((s, r) => s + r.rate, 0);
+  const dt = 1 / 60;
+  let waited = 0;
+  const trials = 400;
+  for (let i = 0; i < trials; i += 1) {
+    let t = 0;
+    while (!rollBite(rng, rates, dt)) t += dt;
+    waited += t;
+  }
+  const mean = waited / trials;
+  assert.ok(Math.abs(mean - 1 / total) < 0.2 / total, `mean wait ${mean.toFixed(1)}s vs expected ${(1 / total).toFixed(1)}s`);
+  assert.ok(mean > 5, 'a matched float rig should still take a while to get bit');
 });
