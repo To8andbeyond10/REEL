@@ -2,19 +2,58 @@
 import { clamp, weightedPick } from './random.js';
 
 export const WEATHER = {
-  sunny: { label: 'Sunny', sky: [0.45, 0.68, 0.95], light: 1, fog: 0.004 },
-  cloudy: { label: 'Overcast', sky: [0.62, 0.67, 0.72], light: 0.7, fog: 0.007 },
-  rain: { label: 'Rain', sky: [0.46, 0.5, 0.55], light: 0.5, fog: 0.012 }
+  sunny: { label: 'Sunny', light: 1, fog: 0.004, overcast: 0, waves: 1 },
+  cloudy: { label: 'Overcast', light: 0.7, fog: 0.007, overcast: 0.7, waves: 1.3 },
+  rain: { label: 'Rain', light: 0.5, fog: 0.012, overcast: 0.85, waves: 1.8, precip: 'rain' },
+  storm: { label: 'Thunderstorm', light: 0.32, fog: 0.016, overcast: 1, waves: 3, precip: 'rain', lightning: true },
+  fog: { label: 'Fog', light: 0.55, fog: 0.05, overcast: 0.8, waves: 0.5 },
+  snow: { label: 'Snow', light: 0.6, fog: 0.018, overcast: 0.8, waves: 1.1, precip: 'snow' }
 };
+
+const DEFAULT_WEIGHTS = { sunny: 3, cloudy: 2, rain: 0.8 };
 
 export function createWorld(rng, startMinute = 6 * 60) {
   return {
     minute: startMinute,
     weather: 'sunny',
+    next: 'cloudy',
     nextWeatherAt: startMinute + 180,
+    weights: DEFAULT_WEIGHTS,
+    tempBase: 19,
     airTemp: 21,
     rng
   };
+}
+
+function pickWeather(world, hour) {
+  const w = world.weights;
+  const options = Object.entries(w).map(([value, weight]) => ({
+    value,
+    // Weather tends to persist; fog only forms in the early morning.
+    weight: (value === world.next ? weight * 1.3 : weight) * (value === 'fog' && (hour < 3 || hour > 9) ? 0 : 1)
+  }));
+  return weightedPick(world.rng, options) || 'cloudy';
+}
+
+// Called when you arrive at a new water: its own weather and temperature.
+export function setClimate(world, weights, tempBase) {
+  world.weights = weights;
+  world.tempBase = tempBase;
+  const h = (world.minute / 60) % 24;
+  world.weather = pickWeather(world, h);
+  world.next = pickWeather(world, (h + 3) % 24);
+  world.nextWeatherAt = world.minute + 90 + world.rng() * 150;
+  updateTemp(world);
+}
+
+// Minutes until the forecast weather arrives.
+export const forecastIn = (world) => Math.max(0, world.nextWeatherAt - world.minute);
+
+function updateTemp(world) {
+  const h = hourOf(world);
+  const daily = 6 * Math.sin(((h - 9) / 24) * Math.PI * 2);
+  const wet = world.weather === 'rain' || world.weather === 'storm' ? 3 : world.weather === 'snow' ? 2 : 0;
+  world.airTemp = world.tempBase + daily - wet;
 }
 
 export const hourOf = (world) => (world.minute / 60) % 24;
@@ -30,16 +69,14 @@ export function clockLabel(world) {
 export function stepWorld(world, minutes) {
   world.minute += minutes;
   if (world.minute >= world.nextWeatherAt) {
-    world.weather = weightedPick(world.rng, [
-      { value: 'sunny', weight: world.weather === 'sunny' ? 3 : 2 },
-      { value: 'cloudy', weight: 2 },
-      { value: 'rain', weight: world.weather === 'rain' ? 1.5 : 0.8 }
-    ]);
-    world.nextWeatherAt = world.minute + 120 + world.rng() * 180;
+    world.weather = world.next;
+    if (world.weather === 'fog' && (hourOf(world) < 3 || hourOf(world) > 10)) world.weather = 'cloudy';
+    world.next = pickWeather(world, (hourOf(world) + 3) % 24);
+    // Storms and fog pass faster than settled weather.
+    const short = world.weather === 'storm' || world.weather === 'fog';
+    world.nextWeatherAt = world.minute + (short ? 50 + world.rng() * 50 : 120 + world.rng() * 180);
   }
-  const h = hourOf(world);
-  const daily = 6 * Math.sin(((h - 9) / 24) * Math.PI * 2);
-  world.airTemp = 19 + daily - (world.weather === 'rain' ? 3 : 0);
+  updateTemp(world);
 }
 
 const smoothPeak = (h, center, width) => {

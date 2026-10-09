@@ -14,7 +14,7 @@ export function createMarket(rng) {
   for (const s of SPECIES) {
     coins[s.id] = { mult: 1, history: [1], pump: 0 };
   }
-  return { coins, sentiment: 'crab', nextSentimentAt: 240, minutes: 0, news: [], rng };
+  return { coins, sentiment: 'crab', nextSentimentAt: 240, minutes: 0, news: [], newsSeq: 0, rng };
 }
 
 export function changeOf(market, speciesId) {
@@ -23,8 +23,9 @@ export function changeOf(market, speciesId) {
   return h[h.length - 1] / then - 1;
 }
 
-function pushNews(market, text, tone) {
-  market.news.unshift({ text, tone, at: market.minutes });
+function pushNews(market, text, tone, extra = {}) {
+  market.newsSeq += 1;
+  market.news.unshift({ id: market.newsSeq, text, tone, at: market.minutes, ...extra });
   market.news.length = Math.min(market.news.length, 8);
 }
 
@@ -36,7 +37,7 @@ export function stepMarket(market, minutes = 1) {
       const keys = Object.keys(SENTIMENT).filter((k) => k !== market.sentiment);
       market.sentiment = keys[Math.floor(rng() * keys.length)];
       market.nextSentimentAt = market.minutes + range(rng, 180, 420);
-      pushNews(market, `Market flips to ${SENTIMENT[market.sentiment].label.toLowerCase()}`, market.sentiment === 'bear' ? 'bad' : 'good');
+      pushNews(market, `Market flips to ${SENTIMENT[market.sentiment].label.toLowerCase()}`, market.sentiment === 'bear' ? 'bad' : 'good', { kind: 'sentiment' });
     }
     const drift = SENTIMENT[market.sentiment].drift;
     for (const s of SPECIES) {
@@ -56,10 +57,10 @@ export function stepMarket(market, minutes = 1) {
       const coin = market.coins[s.id];
       if (rng() < 0.6) {
         coin.pump = range(rng, 0.8, 1.6);
-        pushNews(market, `$${s.ticker} pumps. ${s.name} buyers everywhere`, 'good');
+        pushNews(market, `$${s.ticker} pumps. ${s.name} buyers everywhere`, 'good', { kind: 'pump', species: s.id });
       } else {
         coin.pump = -range(rng, 0.45, 0.65);
-        pushNews(market, `Rug pull on $${s.ticker}. ${s.name} prices crater`, 'bad');
+        pushNews(market, `Rug pull on $${s.ticker}. ${s.name} prices crater`, 'bad', { kind: 'rug', species: s.id });
       }
     }
   }

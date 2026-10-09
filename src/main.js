@@ -1,16 +1,21 @@
-// Memefishing: first-person fishing sim. Wires the sim rules (src/sim) to the 3D lake and HUD (src/game).
+// Memefishing: first-person fishing sim. Wires the sim rules (src/sim) to the 3D world and HUD (src/game).
 import * as pc from 'playcanvas';
-import { LakeScene } from './game/scene.js';
+import { WorldScene } from './game/scene.js';
+import { Life } from './game/life.js';
 import { Effects, FloatBobber, Lure, Rod, buildFish } from './game/rig.js';
 import { Ui } from './game/ui.js';
 import { Sound } from './game/audio.js';
-import { SPECIES, SPOTS, byId } from './sim/data.js';
-import { SPOT_POSES, castLanding, depthAt, forward } from './sim/lake.js';
+import { SPECIES } from './sim/data.js';
+import { castLanding, forward, spotById, waterById } from './sim/waters.js';
 import { biteCue, biteRates, createBite, lengthCm, rollBite, rollWeight, stepBite, stepLureDepth, strike, trophyRank } from './sim/bite.js';
 import { RESULT_TEXT, createFight, fightReadout, stepFight } from './sim/fight.js';
-import { SENTIMENT, createMarket, quote, stepMarket } from './sim/market.js';
-import { createWorld, daylight, hourOf, stepWorld } from './sim/world.js';
-import { ALL_GEAR, BAG_SIZE, buy, catchXp, gear, levelOf, loadProfile, recordCatch, repairCost, saveProfile, travel } from './sim/profile.js';
+import { SENTIMENT, changeOf, createMarket, quote, stepMarket } from './sim/market.js';
+import { WEATHER, clockLabel, createWorld, dayOf, daylight, hourOf, setClimate, stepWorld } from './sim/world.js';
+import { ALL_GEAR, BAG_SIZE, bridge, buy, catchXp, gear, levelOf, loadProfile, owns, recordCatch, repairCost, saveProfile, travel } from './sim/profile.js';
+import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/events.js';
+import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
+import { derbyCatch, register, settleDerby, stepDerby, upcomingDerbies } from './sim/derby.js';
+import { sonar } from './sim/sonar.js';
 import { clamp, createRng } from './sim/random.js';
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -18,7 +23,8 @@ const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const LINE_COLORS = {
   'line-mono6': new pc.Color(0.9, 0.92, 0.9, 0.8),
   'line-fluoro10': new pc.Color(0.95, 0.8, 0.85, 0.6),
-  'line-braid30': new pc.Color(0.85, 1, 0.2, 0.95)
+  'line-braid30': new pc.Color(0.85, 1, 0.2, 0.95),
+  'line-ledger65': new pc.Color(1, 0.55, 0.15, 0.95)
 };
 
 class Game {
@@ -35,6 +41,9 @@ class Game {
     this.world = createWorld(this.rng, 6 * 60 + 30);
     this.market = createMarket(this.rng);
     stepMarket(this.market, 90); // some price history before the first look
+    this.events = createEvents();
+    this.events.lastNews = this.market.newsSeq;
+    this.events.nextHotspotAt = this.world.minute + 25;
     this.state = 'title';
     this.input = { primary: false, secondary: false, primaryEdge: false, secondaryEdge: false, primaryUp: false };
     this.aim = { yaw: 0, pitch: -0.1, keys: 0 };
@@ -49,6 +58,9 @@ class Game {
     this.fishModels = {};
     this.hudTimer = 0;
     this.whip = 0;
+    this.photo = false;
+    this.snap = null;
+    this.finderOn = true;
 
     this.app = new pc.Application(canvas, {
       mouse: new pc.Mouse(canvas),
@@ -66,38 +78,61 @@ class Game {
     this.camera.camera.gammaCorrection = pc.GAMMA_SRGB;
     this.app.root.addChild(this.camera);
 
-    this.scene = new LakeScene(this.app);
+    this.scene = new WorldScene(this.app);
     this.rod = new Rod(this.camera);
     this.floatModel = new FloatBobber(this.app);
     this.lureModel = new Lure(this.app);
     this.effects = new Effects(this.app);
+    this.life = new Life(this.app, this.scene, this.effects);
     for (const s of SPECIES) this.fishModels[s.id] = buildFish(this.app, s);
     this.sound = new Sound();
     this.ui = new Ui(this);
+    this.scene.onThunder = (dist) => this.sound.thunder(dist);
+    this.life.onSplash = (p, size) => {
+      if (p.distance(this.camera.getPosition()) < 45) this.sound.plop(Math.min(1.4, 0.5 + size * 0.5));
+    };
 
+    this.loadWater();
     this.resetDrag();
     this.bindInput(canvas);
     window.addEventListener('resize', () => this.app.resizeCanvas());
     this.app.on('update', (dt) => this.update(dt));
-    this.placeCamera(0);
-    this.updateEnvironment(true);
+    this.app.on('frameend', () => this.takeSnap());
     this.title();
   }
 
   get gear() {
     return gear(this.profile);
   }
+  get water() {
+    return waterById(this.profile.water);
+  }
   get pose() {
-    return SPOT_POSES[this.profile.spot];
+    return this.water.poses[this.profile.spot];
   }
   get spot() {
-    return byId(SPOTS, this.profile.spot);
+    return spotById(this.profile.spot);
   }
   get rodBroken() {
     return this.profile.brokenRod === this.profile.loadout.rod;
   }
   get reelSpeed() {
     return (this.gear.reel.speed * this.reelGear) / 5;
+  }
+  get hasFinder() {
+    return owns(this.profile, 'finder');
+  }
+
+  // Builds the scenery, weather and missions for the water you're on.
+  loadWater() {
+    const water = this.water;
+    this.scene.build(water);
+    this.life.setWater(water);
+    setClimate(this.world, water.weather, water.tempBase);
+    ensureMissions(this.profile, water.id, this.rng);
+    this.aim.yaw = 0;
+    this.placeCamera(0);
+    this.updateEnvironment(true);
   }
 
   resetDrag() {
@@ -132,6 +167,11 @@ class Game {
     };
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('pointerdown', (e) => {
+      if (this.photo) {
+        if (e.pointerType !== 'touch') this.snapPhoto();
+        else this.touchLook = { x: e.clientX, y: e.clientY, yaw: this.aim.yaw, pitch: this.aim.pitch };
+        return;
+      }
       if (this.blocked) return;
       if (e.pointerType === 'touch') {
         this.touchLook = { x: e.clientX, y: e.clientY, yaw: this.aim.yaw, pitch: this.aim.pitch };
@@ -147,17 +187,18 @@ class Game {
       up(e.button === 2 ? 'secondary' : 'primary');
     });
     window.addEventListener('pointermove', (e) => {
-      if (this.blocked) return;
+      if (this.blocked && !this.photo) return;
+      const yawMax = this.photo ? 2.6 : 1;
       if (e.pointerType === 'touch') {
         if (!this.touchLook) return;
-        this.aim.yaw = clamp(this.touchLook.yaw - (e.clientX - this.touchLook.x) * 0.004, -1, 1);
-        this.aim.pitch = clamp(this.touchLook.pitch - (e.clientY - this.touchLook.y) * 0.003, -0.5, 0.2);
+        this.aim.yaw = clamp(this.touchLook.yaw - (e.clientX - this.touchLook.x) * 0.004, -yawMax, yawMax);
+        this.aim.pitch = clamp(this.touchLook.pitch - (e.clientY - this.touchLook.y) * 0.003, -0.6, this.photo ? 0.7 : 0.2);
         return;
       }
       const nx = e.clientX / window.innerWidth - 0.5;
       const ny = e.clientY / window.innerHeight - 0.5;
-      this.aim.yaw = clamp(-nx * 1.9, -1, 1);
-      this.aim.pitch = clamp(-ny * 0.7 - 0.1, -0.5, 0.2);
+      this.aim.yaw = clamp(-nx * (this.photo ? 5 : 1.9), -yawMax, yawMax);
+      this.aim.pitch = clamp(-ny * (this.photo ? 1.4 : 0.7) - 0.1, -0.6, this.photo ? 0.7 : 0.2);
     });
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -168,10 +209,22 @@ class Game {
       if (this.state === 'title') return;
       const k = e.code;
       if (k === 'Escape') {
-        if (this.ui.modalOpen) this.ui.close();
+        if (this.photo) this.togglePhoto();
+        else if (this.ui.modalOpen) this.ui.close();
         return;
       }
-      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyH: 'help' };
+      if (k === 'KeyP' && !e.repeat) {
+        this.togglePhoto();
+        return;
+      }
+      if (this.photo) {
+        if (k === 'Space') {
+          e.preventDefault();
+          this.snapPhoto();
+        }
+        return;
+      }
+      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyO: 'missions', KeyH: 'help' };
       if (panels[k]) {
         if (this.ui.panel === panels[k]) this.ui.close();
         else this.ui.open(panels[k]);
@@ -190,6 +243,7 @@ class Game {
       else if (k === 'KeyE') this.setFloatDepth(this.profile.floatDepth + 0.2);
       else if (k === 'KeyQ') this.setFloatDepth(this.profile.floatDepth - 0.2);
       else if (k === 'KeyZ') this.toggleFastForward();
+      else if (k === 'KeyK') this.finderOn = !this.finderOn;
       else if (k === 'KeyA') this.aim.keys = 1;
       else if (k === 'KeyD') this.aim.keys = -1;
     });
@@ -223,13 +277,16 @@ class Game {
       b.addEventListener('pointerleave', release);
     });
     document.getElementById('ff-button').addEventListener('click', () => this.toggleFastForward());
+    document.getElementById('photo-button').addEventListener('click', () => this.togglePhoto());
+    document.getElementById('photo-snap').addEventListener('click', () => this.snapPhoto());
+    document.getElementById('photo-exit').addEventListener('click', () => this.togglePhoto());
     document.getElementById('mute-button').addEventListener('click', (e) => {
       e.currentTarget.textContent = this.sound.toggle() ? 'Sound off' : 'Sound';
     });
   }
 
   get blocked() {
-    return this.state === 'title' || this.ui.modalOpen || this.state === 'catch';
+    return this.state === 'title' || this.ui.modalOpen || this.state === 'catch' || this.photo;
   }
 
   adjustDrag(delta) {
@@ -238,7 +295,7 @@ class Game {
   }
 
   setFloatDepth(v) {
-    this.profile.floatDepth = clamp(Math.round(v * 10) / 10, 0.3, 6);
+    this.profile.floatDepth = clamp(Math.round(v * 10) / 10, 0.3, 12);
     this.save();
   }
 
@@ -251,6 +308,58 @@ class Game {
     this.input.primaryEdge = false;
     this.input.secondaryEdge = false;
     this.input.primaryUp = false;
+  }
+
+  // ---------- photo mode ----------
+  togglePhoto() {
+    if (this.state === 'title' || this.state === 'fight' || this.state === 'bite') return;
+    if (this.ui.modalOpen) this.ui.close();
+    this.photo = !this.photo;
+    this.fastForward = false;
+    document.body.classList.toggle('photo', this.photo);
+    if (!this.photo) this.aim.pitch = clamp(this.aim.pitch, -0.5, 0.2);
+  }
+
+  photoCaption() {
+    const w = this.water;
+    return `${w.name} · ${this.spot.name} · Day ${dayOf(this.world)} ${clockLabel(this.world)} · ${WEATHER[this.world.weather].label}`;
+  }
+
+  // The capture happens at the end of the next rendered frame, while the canvas still holds it.
+  snapPhoto(title = null, caption = this.photoCaption()) {
+    this.snap = { title, caption };
+  }
+
+  takeSnap() {
+    if (!this.snap) return;
+    const { title, caption } = this.snap;
+    this.snap = null;
+    const src = this.app.graphicsDevice.canvas;
+    const out = document.createElement('canvas');
+    out.width = src.width;
+    out.height = src.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(src, 0, 0);
+    const s = out.height / 720;
+    const grd = ctx.createLinearGradient(0, out.height * 0.7, 0, out.height);
+    grd.addColorStop(0, 'rgba(0,0,0,0)');
+    grd.addColorStop(1, 'rgba(0,0,0,0.7)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, out.height * 0.7, out.width, out.height * 0.3);
+    ctx.fillStyle = '#f5c542';
+    ctx.font = `900 ${26 * s}px system-ui, sans-serif`;
+    ctx.fillText('MEMEFISHING', 24 * s, out.height - (title ? 92 : 58) * s);
+    ctx.fillStyle = '#ffffff';
+    if (title) {
+      ctx.font = `800 ${30 * s}px system-ui, sans-serif`;
+      ctx.fillText(title, 24 * s, out.height - 52 * s);
+    }
+    ctx.font = `500 ${17 * s}px system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(caption, 24 * s, out.height - 22 * s);
+    this.lastPhoto = out.toDataURL('image/png');
+    this.sound.cash();
+    this.ui.showPhoto(this.lastPhoto, title || this.water.name);
   }
 
   // ---------- menu actions ----------
@@ -292,9 +401,26 @@ class Game {
       case 'travel':
         this.travelTo(data.id);
         return;
+      case 'bridge':
+        this.bridgeTo(data.id);
+        return;
       case 'rest':
         this.restUntil(Number(data.hour));
         break;
+      case 'derby-enter': {
+        const d = upcomingDerbies(p.water, this.world.minute).find((x) => x.id === data.id);
+        if (d && register(p, d)) {
+          this.sound.cash();
+          this.ui.notice(`Registered for the ${this.water.name} derby. Fee ${d.fee} MEME.`, 'good');
+        }
+        break;
+      }
+      case 'trophy-photo': {
+        const info = this.catchInfo;
+        this.ui.hideCatch();
+        this.snapPhoto(`${info.species.name} · ${info.weight.toFixed(2)} kg${info.trophy ? ` · ${info.trophy}` : ''}`, `$${info.species.ticker} · ${info.length} cm · ${this.photoCaption()}`);
+        return;
+      }
       case 'keep':
       case 'release':
       case 'dump':
@@ -311,10 +437,12 @@ class Game {
   sell(indices) {
     const p = this.profile;
     let total = 0;
+    const changes = [];
     for (const i of [...indices].sort((a, b) => b - a)) {
       const f = p.bag[i];
       if (!f) continue;
       total += f.weight * quote(this.market, f.species);
+      changes.push(changeOf(this.market, f.species));
       p.bag.splice(i, 1);
       p.stats.sold += 1;
     }
@@ -324,7 +452,16 @@ class Game {
     if (total > 0) {
       this.sound.cash();
       this.ui.toast(`+${total} MEME`, 'good');
+      this.missionsDone(missionSell(p, { water: p.water, total, changes }));
     }
+  }
+
+  missionsDone(done) {
+    for (const m of done) {
+      this.ui.notice(`Mission complete: ${m.text}. +${m.reward.meme} MEME, +${m.reward.xp} XP`, 'good');
+      this.sound.landed();
+    }
+    if (done.length) ensureMissions(this.profile, this.profile.water, this.rng);
   }
 
   travelTo(id) {
@@ -342,6 +479,23 @@ class Game {
     this.save();
   }
 
+  // Moving to another water: pay the gas, rebuild the world.
+  bridgeTo(id) {
+    const gas = waterById(id).gas;
+    if (!bridge(this.profile, id)) return;
+    this.ui.close();
+    this.reelIn();
+    this.ui.fade(true);
+    this.save();
+    setTimeout(() => {
+      this.loadWater();
+      this.advanceMinutes(30);
+      this.ui.fade(false);
+      this.ui.toast(this.water.name);
+      this.ui.notice(gas ? `Bridged to ${this.water.name}. Gas: ${gas} MEME` : `Back home on ${this.water.name}`, 'good');
+    }, 450);
+  }
+
   restUntil(hour) {
     const now = hourOf(this.world);
     let delta = hour - now;
@@ -355,10 +509,34 @@ class Game {
     }, 450);
   }
 
+  // One game minute of the world: weather, market, live events and derbies.
+  tickMinute(quiet = false) {
+    stepWorld(this.world, 1);
+    stepMarket(this.market, 1);
+    const started = stepEvents(this.events, { rng: this.rng, minute: this.world.minute, water: this.water, spot: this.profile.spot, world: this.world, market: this.market });
+    if (!quiet) {
+      for (const e of started) {
+        this.ui.notice(e.text, e.tone);
+        if (e.kind === 'boils') this.sound.bite();
+      }
+    }
+    const d = this.profile.derby;
+    if (d && !d.settled) {
+      stepDerby(d, this.world.minute, this.rng);
+      const res = settleDerby(this.profile, this.world.minute);
+      if (res) {
+        const place = ['1st', '2nd', '3rd'][res.rank - 1] || `${res.rank}th`;
+        this.ui.notice(res.prize ? `Derby over: you placed ${place} and won ${res.prize} MEME (+${res.xp} XP)` : `Derby over: you placed ${place}. ${res.xp ? `+${res.xp} XP` : 'Better luck next time.'}`, res.prize ? 'good' : 'bad');
+        if (res.prize) this.sound.cash();
+        this.save();
+      }
+    }
+  }
+
   advanceMinutes(minutes) {
-    stepWorld(this.world, minutes);
-    stepMarket(this.market, Math.min(minutes, 1440));
+    for (let i = 0; i < minutes; i += 1) this.tickMinute(true);
     this.updateEnvironment(true);
+    for (const h of hotspots(this.events, this.water.id)) this.ui.notice(h.text, h.tone);
   }
 
   updateEnvironment(force = false) {
@@ -393,11 +571,10 @@ class Game {
   startCast() {
     const { rod, lure } = this.gear;
     const pose = this.pose;
-    const reach = (rod.cast * (lure.kind === 'bottom' ? 0.85 : 1) * (0.25 + 0.75 * this.castPower)) + 3;
-    const land = castLanding(pose, this.castYaw(), reach);
+    const reach = rod.cast * (lure.kind === 'bottom' ? 0.85 : 1) * (0.25 + 0.75 * this.castPower) + 3;
+    const land = castLanding(this.water, pose, this.castYaw(), reach);
     const tip = this.rod.tipPosition().clone();
-    const dir = forward(this.castYaw());
-    this.lure.dir = dir;
+    this.lure.dir = forward(land.yaw);
     this.lure.flight = { t: 0, dur: 0.45 + land.dist / 28, from: tip, to: new pc.Vec3(land.x, 0, land.z) };
     this.lure.dist = land.dist;
     this.lure.x = land.x;
@@ -468,7 +645,8 @@ class Game {
   updateWaiting(dt) {
     const { lure, line } = this.gear;
     const L = this.lure;
-    const bottom = depthAt(L.x, L.z);
+    const pose = this.pose;
+    const shape = this.water.shape;
     let retrieving = this.input.primary ? this.reelSpeed : 0;
     if (this.input.secondaryEdge && lure.kind === 'lure') {
       L.hop = 0.35;
@@ -479,9 +657,24 @@ class Game {
       L.hop -= dt;
       retrieving = Math.max(retrieving, lure.idealSpeed || 0);
     }
-    if (this.input.primary) L.dist -= this.reelSpeed * dt * (lure.kind === 'bottom' ? 0.7 : 1);
-    L.x = this.pose.x + L.dir.x * L.dist;
-    L.z = this.pose.z + L.dir.z * L.dist;
+    if (this.input.primary) {
+      const dx = pose.x - L.x;
+      const dz = pose.z - L.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const step = Math.min(d, this.reelSpeed * dt * (lure.kind === 'bottom' ? 0.7 : 1));
+      L.x += (dx / d) * step;
+      L.z += (dz / d) * step;
+    }
+    // On the river the current carries floats downstream; sinkers mostly hold.
+    if (shape.kind === 'river') {
+      const fl = shape.flow(L.x, L.z);
+      const k = lure.kind === 'float' ? 1 : lure.kind === 'bottom' ? 0.04 : 0.45;
+      L.x += fl.x * fl.speed * k * dt;
+      L.z += fl.z * fl.speed * k * dt;
+    }
+    L.dist = Math.hypot(L.x - pose.x, L.z - pose.z);
+    if (L.dist > 0.01) L.dir = { x: (L.x - pose.x) / L.dist, z: (L.z - pose.z) / L.dist };
+    const bottom = shape.depthAt(L.x, L.z);
     L.depth = stepLureDepth(lure, L.depth, bottom, retrieving, this.profile.floatDepth, dt);
     L.settled += dt;
     L.retrieving = retrieving;
@@ -491,8 +684,13 @@ class Game {
       this.ui.prompt('');
       return;
     }
+    if (L.dist > 80) {
+      this.reelIn();
+      this.ui.toast('Drifted too far. Reeled in.', 'bad');
+      return;
+    }
 
-    const kindHint = lure.kind === 'float' ? 'Watch the float' : lure.kind === 'bottom' ? 'Watch the rod tip' : 'Hold to retrieve, right click to hop, pause to sink';
+    const kindHint = lure.kind === 'float' ? (shape.kind === 'river' ? 'Let it drift, watch the float' : 'Watch the float') : lure.kind === 'bottom' ? 'Watch the rod tip' : 'Hold to retrieve, right click to hop, pause to sink';
     this.ui.prompt(`${kindHint} · ${L.dist.toFixed(0)} m`);
 
     const canBite = lure.kind === 'lure' ? true : L.settled > 2.5;
@@ -505,7 +703,8 @@ class Game {
         retrieving,
         hour: hourOf(this.world),
         weather: this.world.weather,
-        sentimentBite: SENTIMENT[this.market.sentiment].bite
+        sentimentBite: SENTIMENT[this.market.sentiment].bite,
+        eventMult: (id) => eventMultiplier(this.events, id, L.x, L.z)
       });
       const species = rollBite(this.rng, rates, dt * (this.fastForward ? 20 : 1));
       if (species) {
@@ -564,16 +763,20 @@ class Game {
     const weight = rollWeight(this.rng, species);
     const pose = this.pose;
     const dir = this.lure.dir;
+    const shape = this.water.shape;
     const bottomAt = (dist, angle) => {
       const c = Math.cos(angle);
       const s = Math.sin(angle);
       const dx = dir.x * c - dir.z * s;
       const dz = dir.x * s + dir.z * c;
-      return depthAt(pose.x + dx * dist, pose.z + dz * dist);
+      return shape.depthAt(pose.x + dx * dist, pose.z + dz * dist);
     };
-    this.fight = createFight(this.rng, { species, weight, rod, reel, line, distance: this.lure.dist, depth: Math.max(0.3, this.lure.depth), bottomAt, hookQuality: quality });
+    const current = shape.flow(this.lure.x, this.lure.z).speed;
+    this.fight = createFight(this.rng, { species, weight, rod, reel, line, distance: this.lure.dist, depth: Math.max(0.3, this.lure.depth), bottomAt, hookQuality: quality, current });
     this.fish = { species, weight, model: this.fishModels[species.id], jumpT: 0 };
-    const scale = (lengthCm(species, weight) / 100) * 1.05;
+    const len = lengthCm(species, weight) / 100;
+    this.fish.length = len;
+    const scale = (len * 1.05) / (species.model?.length || 1);
     this.fish.model.setLocalScale(scale, scale, scale);
     this.floatModel.entity.enabled = false;
     this.lureModel.entity.enabled = false;
@@ -643,10 +846,12 @@ class Game {
         bagFull: this.profile.bag.length >= BAG_SIZE
       };
       recordCatch(this.profile, species, weight);
+      if (derbyCatch(this.profile.derby, this.world.minute, this.profile.water, weight)) this.ui.notice(`Derby weigh-in: ${species.name} ${weight.toFixed(2)} kg`, 'good');
       this.save();
       this.ui.catchCard(this.catchInfo);
       this.input.primary = false;
       this.input.secondary = false;
+      this.fish.model.enabled = true;
       return;
     }
     if (result === 'snapped') this.sound.snap();
@@ -657,6 +862,19 @@ class Game {
     }
     this.ui.toast(RESULT_TEXT[result], 'bad');
     this.reelIn();
+  }
+
+  // Hold the catch up in front of the camera for the card (and the trophy photo).
+  holdFish() {
+    const cam = this.camera.getPosition();
+    const fwd = this.camera.forward;
+    const right = this.camera.right;
+    const dist = Math.max(0.75, this.fish.length * 1.15);
+    const pos = cam.clone().add(fwd.clone().mulScalar(dist)).add(new pc.Vec3(0, -0.08 - this.fish.length * 0.08, 0));
+    const m = this.fish.model;
+    m.setPosition(pos);
+    m.lookAt(pos.clone().add(right));
+    m.rotateLocal(Math.sin(performance.now() / 700) * 4, 0, 8 + Math.sin(performance.now() / 160) * 3);
   }
 
   finishCatch(choice) {
@@ -678,6 +896,18 @@ class Game {
       p.stats.released += 1;
       this.effects.splash(new pc.Vec3(this.pose.x + this.lure.dir.x * 2.5, 0, this.pose.z + this.lure.dir.z * 2.5), 0.5);
     }
+    this.missionsDone(
+      missionCatch(p, {
+        water: p.water,
+        species: info.species.id,
+        weight: info.weight,
+        lure: p.loadout.lure,
+        hour: hourOf(this.world),
+        released: choice === 'release',
+        trophy: !!info.trophy
+      })
+    );
+    if (choice === 'dump') this.missionsDone(missionSell(p, { water: p.water, total: Math.round(info.weight * quote(this.market, info.species.id) * 0.8), changes: [changeOf(this.market, info.species.id)] }));
     const levelAfter = levelOf(p.xp);
     this.save();
     this.ui.hideCatch();
@@ -685,14 +915,14 @@ class Game {
     this.reelIn();
     if (levelAfter > levelBefore) {
       this.sound.landed();
-      this.ui.toast(`Level ${levelAfter}! New gear in the shop`, 'good');
+      this.ui.toast(`Level ${levelAfter}! New gear and waters`, 'good');
     }
   }
 
   // ---------- per frame ----------
   placeCamera(dt) {
     const pose = this.pose;
-    this.aim.yaw = clamp(this.aim.yaw + this.aim.keys * dt * 0.9, -1, 1);
+    this.aim.yaw = clamp(this.aim.yaw + this.aim.keys * dt * 0.9, this.photo ? -2.6 : -1, this.photo ? 2.6 : 1);
     let yaw = pose.yaw + this.aim.yaw;
     if (this.state === 'fight' && this.fishPos) {
       const toFish = Math.atan2(-(this.fishPos.x - pose.x), -(this.fishPos.z - pose.z));
@@ -713,48 +943,89 @@ class Game {
       this.minuteAcc += dt * speed;
       while (this.minuteAcc >= 1) {
         this.minuteAcc -= 1;
-        stepWorld(this.world, 1);
-        stepMarket(this.market, 1);
+        this.tickMinute();
       }
       this.updateEnvironment();
 
-      switch (this.state) {
-        case 'idle':
-        case 'charging':
-          this.updateIdle(dt);
-          break;
-        case 'flying':
-          this.updateFlight(dt);
-          break;
-        case 'waiting':
-          this.updateWaiting(dt);
-          break;
-        case 'bite':
-          this.updateBite(dt);
-          break;
-        case 'fight':
-          this.updateFight(dt);
-          break;
-        default:
-          break;
+      if (!this.photo) {
+        switch (this.state) {
+          case 'idle':
+          case 'charging':
+            this.updateIdle(dt);
+            break;
+          case 'flying':
+            this.updateFlight(dt);
+            break;
+          case 'waiting':
+            this.updateWaiting(dt);
+            break;
+          case 'bite':
+            this.updateBite(dt);
+            break;
+          case 'fight':
+            this.updateFight(dt);
+            break;
+          default:
+            break;
+        }
       }
     }
     this.consumeEdges();
 
     this.placeCamera(dt);
-    this.scene.update(dt, this.camera.getPosition());
+    if (this.state === 'catch' && this.fish) this.holdFish();
+    const cam = this.camera.getPosition();
+    const hour = hourOf(this.world);
+    const light = daylight(hour);
+    this.scene.update(dt, cam);
+    this.life.update(dt, {
+      cam,
+      yaw: this.camYaw,
+      light,
+      hour,
+      hotspots: hotspots(this.events, this.water.id),
+      twilight: Math.max(Math.exp(-(((hour - 6.5) / 1.5) ** 2)), Math.exp(-(((hour - 19.5) / 1.5) ** 2)))
+    });
     this.updateRig(dt);
     this.effects.update(dt);
     this.drawLine();
     this.sound.reel(dt, (this.state === 'waiting' || this.state === 'fight') && this.input.primary && !this.fight?.reelStall ? this.reelGear / 5 : 0);
-    this.sound.ambience(dt, { day: daylight(hourOf(this.world)), rain: this.world.weather === 'rain' });
+    const w = WEATHER[this.world.weather];
+    this.sound.ambience(dt, {
+      day: light,
+      rain: w.precip === 'rain',
+      storm: !!w.lightning,
+      river: this.water.shape.kind === 'river',
+      frogs: this.water.life.frogs || 0,
+      birds: !!this.water.life.birds
+    });
 
     this.hudTimer -= rawDt;
     if (this.hudTimer <= 0 && this.state !== 'title') {
       this.hudTimer = 0.2;
       this.ui.hud();
+      this.ui.sonar(this.hasFinder && this.finderOn ? this.sonarReading() : null);
       if (this.ui.panel === 'market' && this.market.minutes % 10 === 0) this.ui.render();
     }
+  }
+
+  sonarReading() {
+    const reach = Math.max(30, Math.min(60, this.gear.rod.cast));
+    return {
+      ...sonar({
+        water: this.water,
+        spot: this.spot,
+        pose: this.pose,
+        yaw: this.lure.active ? Math.atan2(-this.lure.dir.x, -this.lure.dir.z) : this.castYaw(),
+        hour: hourOf(this.world),
+        weather: this.world.weather,
+        events: this.events,
+        minute: this.world.minute,
+        reach
+      }),
+      lure: this.lure.active && !this.lure.flight ? { dist: this.lure.dist, depth: this.lure.depth } : null,
+      temp: this.water.tempBase + 2 * Math.sin(((hourOf(this.world) - 11) / 24) * Math.PI * 2)
+    };
   }
 
   updateRig(dt) {
@@ -774,6 +1045,8 @@ class Game {
       load = 0.1;
     } else if (this.state === 'charging') {
       lift = this.castPower * 0.6;
+    } else if (this.state === 'catch') {
+      lift = 0.5;
     }
     this.whip = Math.max(0, this.whip - dt * 3.5);
     const whipCurve = this.whip > 0.7 ? -(1 - this.whip) * 2 : this.whip * 0.5;
@@ -782,7 +1055,7 @@ class Game {
     // Float and lure follow the water.
     const L = this.lure;
     const kind = this.gear.lure.kind;
-    if (L.active && !L.flight && this.state !== 'fight') {
+    if (L.active && !L.flight && this.state !== 'fight' && this.state !== 'catch') {
       const wave = this.scene.waveHeight(L.x, L.z, this.scene.time);
       if (kind === 'float') {
         let y = wave + 0.02 + Math.sin(this.scene.time * 2.1) * 0.01;
@@ -793,7 +1066,7 @@ class Game {
       } else {
         this.lureModel.entity.enabled = L.depth < 0.6;
         this.lureModel.entity.setPosition(L.x, Math.max(-L.depth, wave - 0.03), L.z);
-        this.lureModel.entity.setEulerAngles(0, (this.castYaw() * 180) / Math.PI, 0);
+        this.lureModel.entity.setEulerAngles(0, (Math.atan2(-L.dir.x, -L.dir.z) * 180) / Math.PI, 0);
       }
     }
   }
@@ -812,6 +1085,9 @@ class Game {
       under = this.fishPos;
       end = new pc.Vec3(this.fishPos.x, Math.max(0, this.fishPos.y), this.fishPos.z);
       sag = Math.max(0, 1 - r.tensionFrac * 4) * (0.15 + r.distance * 0.02);
+    } else if (this.state === 'catch' && this.fish) {
+      end = this.fish.model.getPosition();
+      sag = 0.05;
     } else if (L.active && (this.state === 'waiting' || this.state === 'bite')) {
       const kind = this.gear.lure.kind;
       const top = kind === 'float' ? this.floatModel.entity.getPosition() : new pc.Vec3(L.x, 0, L.z);

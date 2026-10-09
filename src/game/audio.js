@@ -119,28 +119,49 @@ export class Sound {
   }
 
   startAmbience() {
-    const src = this.ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    src.loop = true;
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 380;
-    this.windGain = this.ctx.createGain();
-    this.windGain.gain.value = 0.05;
-    src.connect(filter).connect(this.windGain).connect(this.master);
-    src.start();
+    const loop = (type, freq, q) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      src.loop = true;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = type;
+      filter.frequency.value = freq;
+      filter.Q.value = q;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(filter).connect(gain).connect(this.master);
+      src.start();
+      return gain;
+    };
+    this.windGain = loop('lowpass', 380, 1);
+    // Rushing water on the river.
+    this.riverGain = loop('bandpass', 900, 0.6);
   }
 
-  ambience(dt, { day, rain }) {
+  // Thunder rumbles longer and quieter the further away the strike was.
+  thunder(distance = 200) {
+    const near = Math.max(0.2, 1 - distance / 400);
+    this.noise(1.8 + (1 - near) * 1.5, { freq: 160, q: 0.7, gain: 0.55 * near, type: 'lowpass', attack: 0.05, sweep: -100 });
+    setTimeout(() => this.noise(1.2, { freq: 90, q: 0.5, gain: 0.35 * near, type: 'lowpass', attack: 0.2 }), 250);
+  }
+
+  // env: { day 0..1, rain, storm, river, frogs 0..1, birds }
+  ambience(dt, { day, rain, storm = false, river = false, frogs = 0, birds = true }) {
     if (!this.ctx) return;
-    this.windGain.gain.setTargetAtTime(this.muted ? 0 : rain ? 0.16 : 0.05, this.ctx.currentTime, 0.5);
-    if (rain && Math.random() < dt * 30) this.noise(0.04, { freq: 5000, q: 1, gain: 0.02 });
-    // Birds by day, crickets at night.
-    if (day > 0.3 && Math.random() < dt * 0.25) {
+    const t = this.ctx.currentTime;
+    this.windGain.gain.setTargetAtTime(this.muted ? 0 : storm ? 0.26 : rain ? 0.16 : 0.05, t, 0.5);
+    this.riverGain.gain.setTargetAtTime(this.muted || !river ? 0 : 0.07, t, 0.8);
+    if (rain && Math.random() < dt * (storm ? 60 : 30)) this.noise(0.04, { freq: 5000, q: 1, gain: 0.02 });
+    // Birds by day, crickets and frogs at night.
+    if (birds && day > 0.3 && !rain && Math.random() < dt * 0.25) {
       const f = 2200 + Math.random() * 1600;
       for (let i = 0; i < 3; i += 1) setTimeout(() => this.tone(f + i * 120, 0.08, { gain: 0.025, slide: 400 }), i * 110);
     } else if (day < 0.1 && Math.random() < dt * 2) {
       this.tone(4200, 0.05, { type: 'square', gain: 0.008 });
+    }
+    if (frogs && day < 0.4 && Math.random() < dt * 0.6 * frogs) {
+      const f = 110 + Math.random() * 70;
+      for (let i = 0; i < 2; i += 1) setTimeout(() => this.tone(f, 0.12, { type: 'sawtooth', gain: 0.03, slide: -30 }), i * 160);
     }
   }
 
