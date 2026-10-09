@@ -57,7 +57,7 @@ export function biteRates({ spot, lure, line, depth, retrieving, hour, weather, 
 // Rolls whether something bites during dt; returns the species or null.
 export function rollBite(rng, rates, dt) {
   const total = rates.reduce((sum, r) => sum + r.rate, 0);
-  if (rng() > 1 - Math.exp(-total * dt)) {
+  if (rng() < 1 - Math.exp(-total * dt)) {
     return weightedPick(rng, rates.map((r) => ({ value: r.species, weight: r.rate })));
   }
   return null;
