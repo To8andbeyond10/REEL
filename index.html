@@ -2,104 +2,116 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
-    <title>REEL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>Memefishing</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <canvas id="application"></canvas>
 
-    <div class="shell">
-      <header class="hud">
-        <div class="hud-group">
-          <span class="label">Session</span>
-          <strong id="session-timer">90s</strong>
-        </div>
-        <div class="hud-group">
-          <span class="label">Score</span>
-          <strong id="score">0</strong>
-        </div>
-        <div class="hud-group">
-          <span class="label">Coins</span>
-          <strong id="coins">0</strong>
-        </div>
-        <div class="hud-group">
-          <span class="label">Best</span>
-          <strong id="best-score">0</strong>
-        </div>
-      </header>
+    <div id="hud" class="hud hidden">
+      <div class="panel top-left">
+        <div class="clock"><strong id="clock">06:00</strong><span id="day">Day 1</span></div>
+        <div class="row"><span id="weather">Sunny</span><span id="temp">18°C</span></div>
+        <div class="row muted"><span id="spot-name">Genesis Lake · Old Dock</span></div>
+        <div class="row" id="ff-row"></div>
+      </div>
 
-      <section class="status-card">
-        <div>
-          <span class="label">State</span>
-          <strong id="state-label">Menu</strong>
-        </div>
-        <div>
-          <span class="label">Fish</span>
-          <strong id="fish-label">—</strong>
-        </div>
-        <div>
-          <span class="label">Streak</span>
-          <strong id="streak-label">0</strong>
-        </div>
-      </section>
+      <div class="ticker"><div class="ticker-track" id="ticker"></div></div>
 
-      <section class="meters">
-        <div class="meter-block">
-          <div class="meter-head">
-            <span>Catch progress</span>
-            <span id="progress-value">0%</span>
-          </div>
-          <div class="meter">
-            <div class="meter-fill progress-fill" id="progress-bar"></div>
-          </div>
+      <div class="panel top-right">
+        <div class="wallet"><span class="label">Wallet</span><strong id="wallet">0</strong><span class="unit">MEME</span></div>
+        <div class="row"><span id="level">Lv 1</span><span id="bag">Bag 0/6</span></div>
+        <div class="xp"><div id="xp-fill"></div></div>
+        <div class="row muted"><span id="sentiment">Crabbing</span></div>
+      </div>
+
+      <div id="news" class="news"></div>
+      <div class="crosshair"></div>
+      <div id="prompt" class="prompt"></div>
+      <div id="toast" class="toast"></div>
+      <div id="cast-meter" class="cast-meter hidden"><div id="cast-fill"></div><span>Cast power</span></div>
+
+      <div id="fight-panel" class="panel fight hidden">
+        <div class="meter-head"><span>Line tension</span><span id="tension-text">0 kg</span></div>
+        <div class="tension"><div id="tension-fill"></div><div id="drag-mark" title="Drag"></div></div>
+        <div class="meter-head small"><span>Rod load</span><span id="rod-text">0%</span></div>
+        <div class="rodload"><div id="rod-fill"></div></div>
+        <div class="fight-row">
+          <span>Line out <strong id="line-out">0 m</strong></span>
+          <span>Fish <strong id="fish-dist">0 m</strong></span>
+          <span id="fight-state" class="fight-state"></span>
         </div>
+      </div>
 
-        <div class="meter-block">
-          <div class="meter-head">
-            <span>Line tension</span>
-            <span id="tension-value">0%</span>
-          </div>
-          <div class="meter">
-            <div class="meter-fill tension-fill" id="tension-bar"></div>
-          </div>
+      <div class="panel gear">
+        <div class="gear-line"><span class="label">Rod</span><span id="g-rod"></span></div>
+        <div class="gear-line"><span class="label">Reel</span><span id="g-reel"></span></div>
+        <div class="gear-line"><span class="label">Line</span><span id="g-line"></span></div>
+        <div class="gear-line"><span class="label">Rig</span><span id="g-lure"></span></div>
+        <div class="settings">
+          <div><span class="label">Drag</span><strong id="g-drag">1.2 kg</strong></div>
+          <div><span class="label">Reel speed</span><strong id="g-speed">3/5</strong></div>
+          <div><span class="label" id="g-depth-label">Lure depth</span><strong id="g-depth">0 m</strong></div>
+          <div><span class="label">Distance</span><strong id="g-dist">0 m</strong></div>
         </div>
-      </section>
+      </div>
 
-      <section class="message-card">
-        <h1 id="message-title">REEL</h1>
-        <p id="message-body">
-          Cast into the meme lagoon, hook fast, and reel only when the line calms down.
-        </p>
-      </section>
+      <nav class="menu-bar">
+        <button data-panel="tackle">Tackle <kbd>T</kbd></button>
+        <button data-panel="market">Market <kbd>B</kbd></button>
+        <button data-panel="map">Map <kbd>M</kbd></button>
+        <button data-panel="journal">Journal <kbd>J</kbd></button>
+        <button data-panel="help">Help <kbd>H</kbd></button>
+        <button id="ff-button">Time ×20 <kbd>Z</kbd></button>
+        <button id="mute-button">Sound</button>
+      </nav>
 
-      <section class="controls">
-        <button id="start-button" class="button primary">Start session</button>
-        <button id="cast-button" class="button">Cast</button>
-        <button id="hook-button" class="button">Hook</button>
-        <button id="reel-button" class="button accent">Hold to reel</button>
-        <button id="pause-button" class="button secondary">Pause</button>
-      </section>
-
-      <section class="overlay hidden" id="pause-overlay">
-        <div class="overlay-card">
-          <h2>Paused</h2>
-          <p>Take a breather. The fish can wait.</p>
-          <button id="resume-button" class="button primary">Resume</button>
+      <div id="touch" class="touch hidden">
+        <div class="touch-left">
+          <button data-touch="drag-down">Drag −</button>
+          <button data-touch="drag-up">Drag +</button>
+          <button data-touch="speed-down">Speed −</button>
+          <button data-touch="speed-up">Speed +</button>
         </div>
-      </section>
-
-      <section class="overlay hidden" id="gameover-overlay">
-        <div class="overlay-card">
-          <h2>Session complete</h2>
-          <p id="gameover-summary">You banked 0 coins.</p>
-          <button id="replay-button" class="button primary">Play again</button>
+        <div class="touch-right">
+          <button data-touch="secondary" class="big alt">Strike / Lift</button>
+          <button data-touch="primary" class="big">Cast / Reel</button>
         </div>
-      </section>
+      </div>
     </div>
+
+    <section id="title" class="screen">
+      <div class="title-card">
+        <p class="eyebrow">A fishing sim with a memecoin twist</p>
+        <h1>MEMEFISHING</h1>
+        <p class="lede">Read the water, rig the right gear, play the drag. Every fish is a coin and the fish market never sleeps.</p>
+        <button id="start-button" class="primary">Start fishing</button>
+        <div class="controls-grid">
+          <span>Aim</span><span>Mouse / A D</span>
+          <span>Cast</span><span>Hold left click or Space, release</span>
+          <span>Reel / retrieve</span><span>Hold left click or Space</span>
+          <span>Strike, lift rod, hop lure</span><span>Right click or F</span>
+          <span>Drag</span><span>Mouse wheel or [ ]</span>
+          <span>Reel speed</span><span>W / S</span>
+          <span>Float depth</span><span>Q / E</span>
+        </div>
+        <p class="fine">MEME is an in-game currency only. No wallets, tokens or real money.</p>
+      </div>
+    </section>
+
+    <section id="modal" class="modal hidden">
+      <div class="modal-card">
+        <header><h2 id="modal-title"></h2><button id="modal-close" class="ghost">Close <kbd>Esc</kbd></button></header>
+        <div id="modal-body"></div>
+      </div>
+    </section>
+
+    <section id="catch" class="catch hidden">
+      <div class="catch-card" id="catch-card"></div>
+    </section>
+
+    <div id="fade" class="fade"></div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
