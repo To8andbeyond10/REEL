@@ -10,15 +10,29 @@ export const QUALITY = {
 };
 
 const KEY = 'memefishing.quality';
+// Set once a player's saved level has been checked against the Medium default.
+const MIGRATED = 'memefishing.quality.v2';
+
+// The game starts on Medium: High renders glitchy on the machines tried so far.
+// Players can still pick High from the menu bar.
+export const DEFAULT_QUALITY = 'medium';
 
 export function savedQuality() {
   try {
-    const q = localStorage.getItem(KEY);
+    let q = localStorage.getItem(KEY);
+    if (!localStorage.getItem(MIGRATED)) {
+      // High used to be the desktop default; move those players down once.
+      if (q === 'high') {
+        q = DEFAULT_QUALITY;
+        localStorage.setItem(KEY, q);
+      }
+      localStorage.setItem(MIGRATED, '1');
+    }
     if (q && QUALITY[q]) return q;
   } catch {
     // Private windows can block storage; fall through to the default.
   }
-  return pc.platform.mobile ? 'medium' : 'high';
+  return DEFAULT_QUALITY;
 }
 
 export function saveQuality(q) {
@@ -39,7 +53,7 @@ export class Renderer {
   }
 
   set(level) {
-    this.level = QUALITY[level] ? level : 'high';
+    this.level = QUALITY[level] ? level : DEFAULT_QUALITY;
     const q = QUALITY[this.level];
     this.q = q;
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, q.pixelRatio);
