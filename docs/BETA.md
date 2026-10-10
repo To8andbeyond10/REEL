@@ -37,7 +37,7 @@ These are checked by `test/store.test.js` (and `test/cashwaters.test.js`, `test/
 
 ## Card payments
 
-Store items can be paid for by card through Stripe Checkout. The player taps **Pay $x by card**, the game asks `api/checkout.js` for a checkout page, and the card is typed into Stripe's own page, never into the game. The server looks up the price itself, so a player can't change what they pay. When Stripe sends the player back, `api/checkout-status.js` confirms the payment and the item is unlocked on that account.
+Store items and gear can be paid for by card through Stripe Checkout. The player taps **Pay $x by card**, the game asks `api/checkout.js` for a checkout page, and the card is typed into Stripe's own page, never into the game. The server looks up the price itself, so a player can't change what they pay. When Stripe sends the player back, `api/checkout-status.js` confirms the payment and the item is unlocked on that account.
 
 Card payments are built but switched off until the deployment turns them on. To switch them on in Vercel (Project settings, Environment Variables), add:
 
@@ -47,7 +47,7 @@ Card payments are built but switched off until the deployment turns them on. To 
 
 Then redeploy. With either one missing, the buttons don't show and the server refuses.
 
-Card payments cover store items only. The Cash Waters balance is play money and can't be bought.
+Card payments cover store looks and gear. In the Tackle shop, rods, reels, lines, lures and the fish finder can be bought by card (prices in `GEAR_USD`, `src/sim/checkout.js`). A card buy unlocks the gear straight away, even before the player reaches its level; the same gear can always be earned with REEL. Card-bought gear is saved on the angler account, so a progress reset doesn't take it away. Gear only changes Sim mode; it never changes Cash Waters odds. The Cash Waters balance is play money and can't be bought.
 
 ## Waiting on the lawyer
 

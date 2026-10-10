@@ -3,8 +3,7 @@
 // - Every item is exactly what the card shows. No random or mystery rewards.
 // - Store items only change how things look. They never change bites, fights or prices.
 // - Items are locked to the account (see account.js). There's no gifting, trading or selling back.
-// - During the beta, items cost REEL points. Real-money checkout is off (flags.js).
-import { FLAGS } from './flags.js';
+// - Items cost REEL points, or a card payment when it's switched on (checkout.js).
 import { grant, ownsItem } from './account.js';
 
 export const SKIN_SLOTS = {
@@ -60,31 +59,4 @@ export function equipSkin(account, item) {
   if (!item || !ownsSkin(account, item)) return false;
   account.equipped = { ...account.equipped, [item.slot]: item.id };
   return true;
-}
-
-// Card checkout. The card is typed into Stripe's own checkout page, never into the game,
-// and the price comes from the server's copy of this catalogue (api/checkout.js).
-export async function startCheckout(item, account, flags = FLAGS, fetchFn = globalThis.fetch) {
-  if (!flags.realMoneyPayments) throw new Error('Card payments are switched off.');
-  if (!item || !(item.usd > 0)) throw new Error('This item is not sold for cash.');
-  const res = await fetchFn('/api/checkout', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ item: item.id, account: account.id })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.url) throw new Error(data.error || 'Checkout is not available right now.');
-  return data.url;
-}
-
-// After Stripe sends the player back, asks the server whether the payment went through
-// and unlocks the item on this account if it did.
-export async function completeCheckout(account, sessionId, fetchFn = globalThis.fetch, now = Date.now()) {
-  const res = await fetchFn(`/api/checkout-status?session_id=${encodeURIComponent(sessionId)}`);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.paid) return { ok: false, why: data.error || 'Payment not completed.' };
-  const item = itemById(data.item);
-  if (!item || data.account !== account.id) return { ok: false, why: 'That payment belongs to another account.' };
-  grant(account, item, 'usd', now);
-  return { ok: true, item };
 }

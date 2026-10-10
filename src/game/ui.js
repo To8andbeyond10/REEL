@@ -9,6 +9,7 @@ import { missionLabel } from '../sim/missions.js';
 import { FORMATS, derbyActive, formatScore, prizePool, standings, upcomingDerbies } from '../sim/derby.js';
 import { EFFECT_TEXT, SKIN_SLOTS, canBuyItem, equippedSkin, itemsFor, ownsSkin } from '../sim/store.js';
 import { FLAGS } from '../sim/flags.js';
+import { gearUsd } from '../sim/checkout.js';
 import { BADGES } from '../sim/account.js';
 import { BAITS, CATCH_LOOK, canTopUp, castCost, frenzyCost, modeFor, stakeOf } from '../sim/cashwaters.js';
 import { summary, track } from '../sim/telemetry.js';
@@ -378,7 +379,11 @@ export class Ui {
         : owned
           ? `<button data-action="equip" data-id="${i.id}" data-slot="${i.slot}">Equip</button>`
           : `<button class="primary" data-action="buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : check.why}</button>`;
-      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${i.name}</h3><div class="stats">${stats(i)}</div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${owned ? 'Owned' : `${fmt(i.price)} REEL · Lv ${i.level}`}</span>${btn}</div></div>`;
+      // Card buys unlock now, before the level is reached.
+      const usd = !owned && FLAGS.realMoneyPayments ? gearUsd(i.id) : 0;
+      const locked = levelOf(profile.xp) < i.level;
+      const payBtn = usd ? `<button data-action="store-card" data-id="${i.id}">${locked ? 'Unlock now' : 'Pay'} $${usd.toFixed(2)} by card</button>` : '';
+      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${i.name}</h3><div class="stats">${stats(i)}</div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${owned ? 'Owned' : `${fmt(i.price)} REEL · Lv ${i.level}`}</span>${btn}${payBtn}</div></div>`;
     };
     const rod = byId(RODS, profile.loadout.rod);
     const repair = this.game.rodBroken
@@ -757,7 +762,7 @@ export class Ui {
             ${card('What it sells', 'New looks for your float and rod. Open it with U.')}
             ${card('Looks only', "Store items never change bites, fights, prices or odds. Each card says what you get, and nothing is random.")}
             ${card('Your account', 'Items are saved to your angler account and stay even if beta progress is reset. They can’t be traded or sold. Set your angler name in the Store.')}
-            ${card('Paying', FLAGS.realMoneyPayments ? 'Pay with REEL from fishing, or by card. Card details go to Stripe’s checkout page, never to the game.' : 'Store items cost REEL from fishing.')}
+            ${card('Paying', FLAGS.realMoneyPayments ? 'Pay with REEL from fishing, or by card. Card details go to Stripe’s checkout page, never to the game. In Tackle, gear can be unlocked by card before you reach its level; it can always be earned with REEL too.' : 'Store items cost REEL from fishing.')}
           </div>`
       },
       controls: {

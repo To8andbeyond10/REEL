@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { FLAGS } from '../src/sim/flags.js';
 import { ACCOUNT_KEY, cleanName, loadAccount, newAccount, ownsItem, rename, saveAccount } from '../src/sim/account.js';
 import * as store from '../src/sim/store.js';
-import { STORE_ITEMS, SKIN_SLOTS, buyWithReel, canBuyItem, completeCheckout, equipSkin, equippedSkin, itemById, startCheckout } from '../src/sim/store.js';
+import { STORE_ITEMS, SKIN_SLOTS, buyWithReel, canBuyItem, equipSkin, equippedSkin, itemById } from '../src/sim/store.js';
+import { GEAR_USD, cashItemById, completeCheckout, startCheckout, syncPaidGear } from '../src/sim/checkout.js';
+import { ALL_GEAR, canBuy, levelOf } from '../src/sim/profile.js';
 import checkoutHandler from '../api/checkout.js';
 import statusHandler from '../api/checkout-status.js';
 import { newProfile } from '../src/sim/profile.js';
@@ -33,6 +35,7 @@ test('card checkout sends only the item and account, and opens the Stripe page',
   assert.equal(url, 'https://checkout.stripe.com/c/pay/cs_test_1');
   assert.deepEqual(sent, { path: '/api/checkout', body: { item: 'float-gold', account: account.id } });
   await assert.rejects(startCheckout(itemById('float-classic'), account, { realMoneyPayments: true }, async () => reply(200, {})), /not sold/);
+  await assert.rejects(startCheckout(ALL_GEAR.find((g) => g.id === 'rod-paper'), account, { realMoneyPayments: true }, async () => reply(200, {})), /not sold/);
 });
 
 test('a confirmed card payment unlocks the item on the paying account only', async () => {
@@ -81,6 +84,10 @@ test('the checkout server prices items itself and refuses while switched off', a
     assert.equal(form.get('line_items[0][price_data][unit_amount]'), '199');
     assert.equal(form.get('metadata[account]'), 'acct_abcdefghijkl');
     assert.equal(form.get('success_url'), 'https://reel.test/?checkout={CHECKOUT_SESSION_ID}');
+    res = fakeRes();
+    await checkoutHandler({ method: 'POST', body: { item: 'rod-satoshi', account: 'acct_abcdefghijkl' }, headers: { host: 'reel.test' } }, res);
+    assert.equal(res.code, 200);
+    assert.equal(form.get('line_items[0][price_data][unit_amount]'), '799');
     res = fakeRes();
     await checkoutHandler({ method: 'POST', body: { item: 'float-classic', account: 'acct_abcdefghijkl' }, headers: {} }, res);
     assert.equal(res.code, 400);
@@ -168,4 +175,35 @@ test('angler names are cleaned', () => {
   assert.equal(rename(account, 'Pepe Hunter 69'), true);
   assert.equal(account.name, 'Pepe Hunter 69');
   assert.equal(cleanName('a'.repeat(40)).length, 20);
+});
+
+test('gear sold by card is priced, shows its stats, and is never starter gear', () => {
+  for (const [id, usd] of Object.entries(GEAR_USD)) {
+    const g = ALL_GEAR.find((x) => x.id === id);
+    assert.ok(g, `${id} is real gear`);
+    assert.ok(g.price > 0, `${id} can also be earned with REEL`);
+    assert.ok(usd > 0 && usd < 10, `${id} has a dollar price`);
+    assert.equal(cashItemById(id).usd, usd);
+    assert.equal(cashItemById(id).kind, 'gear');
+  }
+  assert.equal(cashItemById('rod-paper'), null);
+  assert.equal(cashItemById('float-gold').kind, 'look');
+});
+
+test('card-bought gear unlocks early, lives on the account and survives a progress reset', async () => {
+  const account = newAccount(createRng(12), 0);
+  const paid = async () => reply(200, { paid: true, item: 'rod-satoshi', account: account.id });
+  const r = await completeCheckout(account, 'cs_g', paid, 9);
+  assert.equal(r.ok, true);
+  assert.equal(r.item.kind, 'gear');
+  assert.deepEqual(account.entitlements, [{ item: 'rod-satoshi', paidWith: 'usd', price: 7.99, at: 9 }]);
+  const profile = newProfile();
+  assert.ok(levelOf(profile.xp) < 7);
+  assert.deepEqual(syncPaidGear(profile, account), ['rod-satoshi']);
+  assert.equal(canBuy(profile, ALL_GEAR.find((g) => g.id === 'rod-satoshi')).why, 'Owned');
+  // A fresh game save gets it back; syncing twice adds nothing.
+  const fresh = newProfile();
+  syncPaidGear(fresh, account);
+  assert.deepEqual(syncPaidGear(fresh, account), []);
+  assert.ok(fresh.owned.includes('rod-satoshi'));
 });

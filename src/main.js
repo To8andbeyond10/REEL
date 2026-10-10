@@ -17,7 +17,8 @@ import { ALL_GEAR, BAG_SIZE, bridge, buy, catchXp, gear, levelOf, loadProfile, o
 import { acceptBetaNotice, loadAccount, rename, saveAccount } from './sim/account.js';
 import { CAST_MS, BAITS, canTopUp, loadCash, modeFor, playCast, playFrenzyBuy, saveCash, topUp } from './sim/cashwaters.js';
 import { addPlayTime, clearStats, loadStats, saveStats, startSession, track } from './sim/telemetry.js';
-import { buyWithReel, completeCheckout, equipSkin, equippedSkin, itemById, startCheckout } from './sim/store.js';
+import { buyWithReel, equipSkin, equippedSkin, itemById } from './sim/store.js';
+import { cashItemById, completeCheckout, startCheckout, syncPaidGear } from './sim/checkout.js';
 import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/events.js';
 import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
 import { derbyCatch, register, settleDerby, stepDerby, upcomingDerbies } from './sim/derby.js';
@@ -46,6 +47,7 @@ class Game {
     })();
     this.profile = loadProfile(this.storage);
     this.account = loadAccount(this.storage);
+    syncPaidGear(this.profile, this.account);
     this.cash = loadCash(this.storage);
     this.cashPending = null;
     this.stats = loadStats(this.storage);
@@ -198,8 +200,15 @@ class Game {
       const r = await completeCheckout(this.account, id);
       if (!r.ok) return this.ui.toast(r.why, 'bad');
       track(this.stats, 'purchase', { item: r.item.id, paidWith: 'usd', at: Date.now() });
-      equipSkin(this.account, r.item);
-      this.applySkins();
+      if (r.item.kind === 'gear') {
+        syncPaidGear(this.profile, this.account);
+        if (r.item.slot !== 'electronics') this.profile.loadout[r.item.slot] = r.item.id;
+        this.resetDrag();
+        this.ui.hud();
+      } else {
+        equipSkin(this.account, r.item);
+        this.applySkins();
+      }
       this.save();
       this.ui.toast(`${r.item.name} unlocked. Thanks for supporting Memefishing!`, 'good');
     } catch {
@@ -526,7 +535,7 @@ class Game {
         break;
       }
       case 'store-card':
-        startCheckout(itemById(data.id), this.account)
+        startCheckout(cashItemById(data.id), this.account)
           .then((url) => {
             this.save();
             window.location.href = url;
