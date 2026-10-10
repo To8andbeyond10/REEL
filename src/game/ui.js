@@ -7,6 +7,8 @@ import { WEATHER, clockLabel, dayOf, forecastIn } from '../sim/world.js';
 import { hotspots } from '../sim/events.js';
 import { missionLabel } from '../sim/missions.js';
 import { FORMATS, derbyActive, formatScore, prizePool, standings, upcomingDerbies } from '../sim/derby.js';
+import { EFFECT_TEXT, SKIN_SLOTS, canBuyItem, equippedSkin, itemsFor, ownsSkin } from '../sim/store.js';
+import { FLAGS } from '../sim/flags.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -35,6 +37,7 @@ export class Ui {
     }
     this.panel = null;
     this.tab = 'rod';
+    this.storeTab = 'float';
     this.toastTimer = 0;
     this.lastNews = null;
     this.tickerAt = -1;
@@ -292,7 +295,7 @@ export class Ui {
 
   render() {
     if (!this.panel) return;
-    const titles = { tackle: 'Tackle shop', market: 'Fish market', map: this.game.water.name, journal: 'Fish journal', missions: 'Missions and derbies', help: 'How to fish', photo: 'Photo' };
+    const titles = { store: 'Store', tackle: 'Tackle shop', market: 'Fish market', map: this.game.water.name, journal: 'Fish journal', missions: 'Missions and derbies', help: 'How to fish', photo: 'Photo' };
     this.el['modal-title'].textContent = titles[this.panel];
     const body = this.el['modal-body'];
     if (this.panel === 'photo') return;
@@ -342,6 +345,34 @@ export class Ui {
       ${this.tab === 'lure' ? floatRow : ''}
       <div class="grid">${items.map(card).join('')}</div>
       <p class="note">Tip: the drag should sit well under your line's break strength. Shakes and surges spike the tension above it.</p>`;
+  }
+
+  store() {
+    const { profile, account } = this.game;
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const swatch = (i) =>
+      i.slot === 'float'
+        ? `<span class="swatch float"><i style="background:${i.look.antenna}"></i><i style="background:${i.look.cap}"></i><i style="background:${i.look.body}"></i></span>`
+        : `<span class="swatch rod" style="background:${i.look.blank}"></span>`;
+    const card = (i) => {
+      const owned = ownsSkin(account, i);
+      const equipped = equippedSkin(account, i.slot).id === i.id;
+      const check = canBuyItem(profile, account, i);
+      const btn = equipped
+        ? '<button disabled>Equipped</button>'
+        : owned
+          ? `<button data-action="store-equip" data-id="${i.id}">Equip</button>`
+          : `<button class="primary" data-action="store-buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : `Need ${check.why}`}</button>`;
+      const price = owned ? (i.price ? 'Owned' : 'Free') : `${fmt(i.price)} REEL${FLAGS.realMoneyPayments ? ` or $${i.usd.toFixed(2)}` : ''}`;
+      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${swatch(i)}${i.name}</h3><div class="stats"><span>Effect <b>${EFFECT_TEXT}</b></span></div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${price}</span>${btn}</div></div>`;
+    };
+    const tabs = Object.entries(SKIN_SLOTS)
+      .map(([k, s]) => `<button data-action="store-tab" data-tab="${k}" class="${this.storeTab === k ? 'on' : ''}">${s.label}</button>`)
+      .join('');
+    return `<div class="account-row"><span class="label">Angler name</span><input id="account-name" type="text" maxlength="20" value="${esc(account.name)}" autocomplete="off"><button data-action="rename">Save</button><span class="note">Your items are saved to this account in this browser and can't be traded or sold.</span></div>
+      <div class="tabs">${tabs}</div>
+      <div class="grid">${itemsFor(this.storeTab).map(card).join('')}</div>
+      <p class="note">Beta: store items cost REEL points from fishing. Real-money purchases are off during the beta. Every item shows exactly what you get, and nothing is random.</p>`;
   }
 
   market() {

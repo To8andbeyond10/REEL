@@ -25,7 +25,8 @@ The design is in [docs/DESIGN.md](docs/DESIGN.md) and what comes next is in [doc
 - **Fish market:** prices per kg move every game minute, with pumps, rug pulls and bull/bear sentiment.
 - **Wildlife and photos:** gulls, bats, fireflies, frogs and rising fish. Photo mode and captioned trophy photos.
 - XP and levels unlock gear, spots and waters. Fish journal. Procedural sound. Saves in the browser.
-- **REEL coin:** earned by selling fish and finishing missions and derbies, spent on gear, repairs, spot unlocks, travel gas and derby entries. Real-money payments aren't built yet.
+- **REEL coin:** earned by selling fish and finishing missions and derbies, spent on gear, repairs, spot unlocks, travel gas and derby entries.
+- **Phase 1 beta:** a beta notice on the title screen, an angler account, and a Store (U) of float and rod looks bought with REEL points. Real-money payments are switched off. See [docs/BETA.md](docs/BETA.md).
 
 ## Run locally
 
@@ -46,13 +47,13 @@ npm test   # fight, bite, waters, events, missions, derby, sonar and balance tes
 | Drag | Mouse wheel or [ and ] | Drag − / + |
 | Reel speed | W / S | Speed − / + |
 | Float depth | Q / E (or in Tackle) | Tackle |
-| Menus | T tackle, B market, M map and waters, O missions and derbies, J journal, H help | Buttons |
+| Menus | T tackle, U store, B market, M map and waters, O missions and derbies, J journal, H help | Buttons |
 | Fish finder | K | Tackle |
 | Photo mode | P, then click or Space to snap | Photo button |
 | Time ×20 | Z | Button |
 
 ## Code layout
 
-- `src/sim/` is the game rules, with no rendering: fight physics, bite model, the waters (shapes, depth, current, spots), world clock and weather, market, live events, missions, derbies, sonar and the player profile. Tested with `node --test`.
+- `src/sim/` is the game rules, with no rendering: fight physics, bite model, the waters (shapes, depth, current, spots), world clock and weather, market, live events, missions, derbies, sonar, the player profile, the account and the store. Tested with `node --test`.
 - `src/game/` is the PlayCanvas world builder (terrain, water, trees, props and weather for any water), wildlife, rod and effects, procedural audio and the HUD and menus.
 - `src/main.js` wires the two together and runs the fishing loop.
