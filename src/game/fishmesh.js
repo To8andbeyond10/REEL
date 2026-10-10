@@ -55,7 +55,7 @@ function fishGeometry(species, m, dims) {
       const s = Math.sin(a);
       const h = s >= 0 ? top : bot;
       const len = Math.hypot(c / side, s / h);
-      const k = smooth(clamp((s + 0.25) / 0.6, 0, 1));
+      const k = smooth(clamp((s + 0.35) / 0.55, 0, 1));
       g.vertex([c * side, s * h, z], [c / side / len, s / h / len, 0], mixC(belly, back, k));
     }
     return base;
@@ -204,6 +204,8 @@ export function buildFish(app, species) {
   // Less ambient light than the scene: the sky's bright horizon otherwise bleaches the flanks.
   const material = vertexColorMaterial({ gloss: 0.5, specular: 0.1 });
   material.ambient = new pc.Color(0.5, 0.5, 0.5);
+  // Sunlit flanks go past 1.0 and the tone map washes them to white, so the colour is held a little lower.
+  material.diffuse = new pc.Color(0.65, 0.65, 0.65);
   material.update();
   const body = new pc.Entity('fish-body');
   body.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, material)], castShadows: false, receiveShadows: false });
