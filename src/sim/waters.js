@@ -131,7 +131,8 @@ export const WATERS = [
     weather: { sunny: 3, cloudy: 2, rain: 0.8, storm: 0.25, fog: 0.5 },
     palette: {
       water: [[0.3, 0.4, 0.3], [0.1, 0.26, 0.34]],
-      opacity: 0.84,
+      // Metres of water you can see into before it goes opaque.
+      clarity: 1.4,
       mud: [0.16, 0.17, 0.12],
       sand: [0.56, 0.5, 0.36],
       grass: [0.27, 0.4, 0.16],
@@ -213,7 +214,8 @@ export const WATERS = [
     weather: { sunny: 1.5, cloudy: 2, rain: 1.6, storm: 0.6, fog: 1.6 },
     palette: {
       water: [[0.08, 0.09, 0.05], [0.035, 0.05, 0.03]],
-      opacity: 0.95,
+      clarity: 0.35,
+      foam: 0.4,
       reflect: 0.45,
       mud: [0.13, 0.12, 0.08],
       sand: [0.33, 0.3, 0.2],
@@ -299,7 +301,7 @@ export const WATERS = [
     weather: { sunny: 2.5, cloudy: 2, rain: 1.1, storm: 0.3, fog: 0.7 },
     palette: {
       water: [[0.26, 0.4, 0.34], [0.07, 0.21, 0.24]],
-      opacity: 0.86,
+      clarity: 2,
       mud: [0.3, 0.29, 0.25],
       sand: [0.52, 0.49, 0.42],
       grass: [0.3, 0.4, 0.18],
@@ -378,7 +380,7 @@ export const WATERS = [
     weather: { sunny: 2, cloudy: 2, snow: 1.6, fog: 0.5, storm: 0.15 },
     palette: {
       water: [[0.3, 0.45, 0.5], [0.05, 0.18, 0.3]],
-      opacity: 0.86,
+      clarity: 2.6,
       mud: [0.22, 0.23, 0.22],
       sand: [0.62, 0.6, 0.57],
       grass: [0.82, 0.85, 0.88],

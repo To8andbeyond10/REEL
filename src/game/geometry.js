@@ -7,6 +7,15 @@ export class GeoBuilder {
     this.normals = [];
     this.colors = [];
     this.indices = [];
+    // Wind bend: alpha runs from 0 at swayBase up to 1 at swayBase + swayLen (see wind.js). Off by default.
+    this.swayBase = 0;
+    this.swayLen = 0;
+  }
+
+  // Plants added after this bend from their root (y = base) to their tip (y = base + len).
+  sway(base, len) {
+    this.swayBase = base;
+    this.swayLen = len;
   }
 
   get count() {
@@ -17,7 +26,8 @@ export class GeoBuilder {
     this.positions.push(p[0], p[1], p[2]);
     this.normals.push(n[0], n[1], n[2]);
     // Clamp: bright colours times shading would otherwise wrap around in the 8-bit buffer.
-    this.colors.push(Math.min(255, c[0] * 255), Math.min(255, c[1] * 255), Math.min(255, c[2] * 255), 255);
+    const bend = this.swayLen > 0 ? Math.min(1, Math.max(0, (p[1] - this.swayBase) / this.swayLen)) : 0;
+    this.colors.push(Math.min(255, c[0] * 255), Math.min(255, c[1] * 255), Math.min(255, c[2] * 255), bend * 255);
   }
 
   // Cone or cylinder (rTop may be 0) around a vertical axis at (x, y, z).
