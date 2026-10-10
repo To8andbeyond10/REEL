@@ -57,7 +57,7 @@ What a top-tier fishing game needs to keep players coming back, what this build 
 - Prediction market: stake REEL on which coin pumps next or who wins a derby.
 - Liquidity pools: lock REEL for a day for a share of derby fees.
 - Rare catches move the market. Landing a legendary pumps its coin for everyone on the server.
-- "Proof of catch" certificates in the trophy room: in-game only, with no tokens.
+- "Proof of catch" certificates in the trophy room.
 
 ## Foundations these depend on
 

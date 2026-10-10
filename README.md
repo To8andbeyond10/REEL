@@ -25,6 +25,7 @@ The design is in [docs/DESIGN.md](docs/DESIGN.md) and what comes next is in [doc
 - **Fish market:** prices per kg move every game minute, with pumps, rug pulls and bull/bear sentiment.
 - **Wildlife and photos:** gulls, bats, fireflies, frogs and rising fish. Photo mode and captioned trophy photos.
 - XP and levels unlock gear, spots and waters. Fish journal. Procedural sound. Saves in the browser.
+- **REEL coin:** earned by selling fish and finishing missions and derbies, spent on gear, repairs, spot unlocks, travel gas and derby entries. Real-money payments aren't built yet.
 
 ## Run locally
 
