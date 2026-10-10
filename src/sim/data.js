@@ -294,6 +294,13 @@ export const LURES = [
 ];
 
 // Gadgets you own rather than equip.
+// Boats: drive out from your spot to water the bank can't reach. Range is how far from the
+// launch point the boat can go. Sim mode only.
+export const BOATS = [
+  { id: 'boat-kayak', name: 'Moon Kayak', price: 1500, level: 3, speed: 3, range: 45, eye: 0.95, bow: 2.4, stern: 1.6, blurb: "Paddle past the reeds and drop-offs the bank can't reach." },
+  { id: 'boat-bass', name: 'Lambo Bass Boat', price: 6000, level: 6, speed: 9, range: 140, eye: 1.45, bow: 4.7, stern: 1.7, blurb: 'Outboard motor, swivel seat and most of the water in range.' }
+];
+
 export const ELECTRONICS = [
   { id: 'finder', name: 'Moonscope Fish Finder', price: 350, level: 2, blurb: 'Sonar on your HUD: the bottom, your lure and fish arcs along your cast line.' }
 ];

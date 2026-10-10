@@ -47,7 +47,7 @@ Card payments are built but switched off until the deployment turns them on. To 
 
 Then redeploy. With either one missing, the buttons don't show and the server refuses.
 
-Card payments cover store looks and gear. In the Tackle shop, rods, reels, lines, lures and the fish finder can be bought by card (prices in `GEAR_USD`, `src/sim/checkout.js`). A card buy unlocks the gear straight away, even before the player reaches its level; the same gear can always be earned with REEL. Card-bought gear is saved on the angler account, so a progress reset doesn't take it away. Gear only changes Sim mode; it never changes Cash Waters odds. The Cash Waters balance is play money and can't be bought.
+Card payments cover store looks and gear. In the Tackle shop, rods, reels, lines, lures, the fish finder and boats can be bought by card (prices in `GEAR_USD`, `src/sim/checkout.js`). A card buy unlocks the gear straight away, even before the player reaches its level; the same gear can always be earned with REEL. Card-bought gear is saved on the angler account, so a progress reset doesn't take it away. Gear only changes Sim mode; it never changes Cash Waters odds. The Cash Waters balance is play money and can't be bought.
 
 ## Waiting on the lawyer
 
@@ -64,4 +64,4 @@ None of this is built. It stays off until a securities and gambling lawyer has r
 - Server sign-in and a server copy of the account, purchases and Cash Waters balance. Until then a card purchase is unlocked in the browser the player paid from; a Stripe webhook should also record purchases on the server.
 - Sending beta stats to a server, once players have agreed to it in the beta terms.
 - An animated in-world Cash Waters cast and fight, instead of the panel reveal.
-- More store categories once they exist in the game: boats, outfits and convenience items.
+- More store categories once they exist in the game: outfits and convenience items.

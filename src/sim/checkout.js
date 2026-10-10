@@ -24,7 +24,9 @@ export const GEAR_USD = {
   bottom: 0.99,
   minnow: 0.99,
   crank: 1.99,
-  finder: 3.99
+  finder: 3.99,
+  'boat-kayak': 4.99,
+  'boat-bass': 9.99
 };
 
 const GEAR_FOR_SALE = ALL_GEAR.filter((g) => GEAR_USD[g.id] > 0).map((g) => ({ ...g, kind: 'gear', usd: GEAR_USD[g.id] }));
