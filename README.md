@@ -26,7 +26,7 @@ The design is in [docs/DESIGN.md](docs/DESIGN.md) and what comes next is in [doc
 - **Wildlife and photos:** gulls, bats, fireflies, frogs and rising fish. Photo mode and captioned trophy photos.
 - XP and levels unlock gear, spots and waters. Fish journal. Procedural sound. Saves in the browser.
 - **REEL coin:** earned by selling fish and finishing missions and derbies, spent on gear, repairs, spot unlocks, travel gas and derby entries.
-- **Phase 1 beta:** a beta notice on the title screen, an angler account with a free Founding Angler badge, a Store (U) of float and rod looks bought with REEL points, Cash Waters (C) on a play balance with Quick Cast and published odds, and local beta stats. Real-money payments are switched off. See [docs/BETA.md](docs/BETA.md).
+- **Phase 1 beta:** a beta notice on the title screen, an angler account with a free Founding Angler badge, a Store (U) of float and rod looks bought with REEL points, Cash Waters (C) on a play balance with Quick Cast and published odds, and local beta stats. Card payments for store items (Stripe Checkout) are built and switch on with two Vercel settings. See [docs/BETA.md](docs/BETA.md).
 
 ## Run locally
 

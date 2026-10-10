@@ -367,7 +367,7 @@ export class Ui {
         ? '<button disabled>Equipped</button>'
         : owned
           ? `<button data-action="store-equip" data-id="${i.id}">Equip</button>`
-          : `<button class="primary" data-action="store-buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : `Need ${check.why}`}</button>`;
+          : `<button class="primary" data-action="store-buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : `Need ${check.why}`}</button>${FLAGS.realMoneyPayments && i.usd > 0 ? `<button data-action="store-card" data-id="${i.id}">Pay $${i.usd.toFixed(2)} by card</button>` : ''}`;
       const price = owned ? (i.price ? 'Owned' : 'Free') : `${fmt(i.price)} REEL${FLAGS.realMoneyPayments ? ` or $${i.usd.toFixed(2)}` : ''}`;
       return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${swatch(i)}${i.name}</h3><div class="stats"><span>Effect <b>${EFFECT_TEXT}</b></span></div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${price}</span>${btn}</div></div>`;
     };
@@ -378,7 +378,7 @@ export class Ui {
     return `<div class="account-row"><span class="label">Angler name</span><input id="account-name" type="text" maxlength="20" value="${esc(account.name)}" autocomplete="off"><button data-action="rename">Save</button>${badges}<button class="ghost" data-action="open-beta">Your beta data</button><span class="note">Your items are saved to this account in this browser and can't be traded or sold.</span></div>
       <div class="tabs">${tabs}</div>
       <div class="grid">${itemsFor(this.storeTab).map(card).join('')}</div>
-      <p class="note">Beta: store items cost REEL points from fishing. Real-money purchases are off during the beta. Every item shows exactly what you get, and nothing is random.</p>`;
+      <p class="note">${FLAGS.realMoneyPayments ? 'Pay with REEL points from fishing, or by card through Stripe. Card details go to Stripe, never to the game.' : 'Store items cost REEL points from fishing.'} Every item shows exactly what you get, and nothing is random.</p>`;
   }
 
   // Cash Waters: the paytable game, on play money for the beta. Odds and RTP are shown, never hidden.

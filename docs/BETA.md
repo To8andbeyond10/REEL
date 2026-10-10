@@ -31,15 +31,25 @@ These are checked by `test/store.test.js` (and `test/cashwaters.test.js`, `test/
 3. **Locked to the account.** There's no gifting, trading, reselling or selling back.
 4. **No pressure.** No countdown timers or "only a few left" messages.
 
-## Real-money payments
+## Card payments
 
-`src/sim/flags.js` has `realMoneyPayments: false`. While it's off, prices show in REEL only and `startCheckout()` refuses before doing anything. No payment provider is connected. The flag stays off until the beta terms, refund policy and payment setup have had a legal review.
+Store items can be paid for by card through Stripe Checkout. The player taps **Pay $x by card**, the game asks `api/checkout.js` for a checkout page, and the card is typed into Stripe's own page, never into the game. The server looks up the price itself, so a player can't change what they pay. When Stripe sends the player back, `api/checkout-status.js` confirms the payment and the item is unlocked on that account.
+
+Card payments are built but switched off until the deployment turns them on. To switch them on in Vercel (Project settings, Environment Variables), add:
+
+- `VITE_REAL_MONEY_PAYMENTS` = `true`
+- `STRIPE_SECRET_KEY` = the secret key from the Stripe dashboard (use a `sk_test_` key first to try it with Stripe's test cards)
+- optionally `PUBLIC_URL`, the site address Stripe sends players back to (defaults to the request's host)
+
+Then redeploy. With either one missing, the buttons don't show and the server refuses.
+
+Card payments cover store items only. The Cash Waters balance is play money and can't be bought.
 
 ## Waiting on the lawyer
 
 None of this is built. It stays off until a securities and gambling lawyer has reviewed it, and the licence and certification it needs are in place:
 
-- Real-money checkout (cards and USDC/USDT) and the paid Founder pack.
+- Stablecoin (USDC/USDT) checkout and the paid Founder pack.
 - Real-money Cash Waters stakes, payouts, withdrawals and the gaming licence they need.
 - Provably fair rolls on a server, with RNG certification.
 - Beta terms, privacy notice and refund policy.
@@ -47,7 +57,7 @@ None of this is built. It stays off until a securities and gambling lawyer has r
 
 ## Still to do
 
-- Server sign-in and a server copy of the account, purchases and Cash Waters balance.
+- Server sign-in and a server copy of the account, purchases and Cash Waters balance. Until then a card purchase is unlocked in the browser the player paid from; a Stripe webhook should also record purchases on the server.
 - Sending beta stats to a server, once players have agreed to it in the beta terms.
 - An animated in-world Cash Waters cast and fight, instead of the panel reveal.
 - More store categories once they exist in the game: boats, outfits and convenience items.

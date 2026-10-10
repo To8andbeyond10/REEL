@@ -191,7 +191,7 @@ button.ghost { background: transparent; }
 .item h3 { margin: 0; font-size: 15px; }
 .item .stats { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 12px; }
 .item .stats b { color: var(--text); font-weight: 600; }
-.item .foot { display: flex; justify-content: space-between; align-items: center; }
+.item .foot { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; align-items: center; }
 .price { color: var(--accent); font-weight: 700; }
 .note { color: var(--muted); font-size: 12px; margin: 6px 0 12px; }
 .slider { display: flex; align-items: center; gap: 10px; margin: 10px 0; }

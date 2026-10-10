@@ -17,7 +17,7 @@ import { ALL_GEAR, BAG_SIZE, bridge, buy, catchXp, gear, levelOf, loadProfile, o
 import { acceptBetaNotice, loadAccount, rename, saveAccount } from './sim/account.js';
 import { CAST_MS, BAITS, canTopUp, loadCash, modeFor, playCast, playFrenzyBuy, saveCash, topUp } from './sim/cashwaters.js';
 import { addPlayTime, clearStats, loadStats, saveStats, startSession, track } from './sim/telemetry.js';
-import { buyWithReel, equipSkin, equippedSkin, itemById } from './sim/store.js';
+import { buyWithReel, completeCheckout, equipSkin, equippedSkin, itemById, startCheckout } from './sim/store.js';
 import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/events.js';
 import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
 import { derbyCatch, register, settleDerby, stepDerby, upcomingDerbies } from './sim/derby.js';
@@ -185,7 +185,28 @@ class Game {
     this.floatModel.setLook(equippedSkin(this.account, 'float').look);
   }
 
+  // Back from Stripe's checkout page: confirm the payment with the server and unlock the item.
+  async handleCheckoutReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('checkout');
+    if (!id) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    if (id === 'cancel') return this.ui.toast('Checkout cancelled. You were not charged.');
+    try {
+      const r = await completeCheckout(this.account, id);
+      if (!r.ok) return this.ui.toast(r.why, 'bad');
+      track(this.stats, 'purchase', { item: r.item.id, paidWith: 'usd', at: Date.now() });
+      equipSkin(this.account, r.item);
+      this.applySkins();
+      this.save();
+      this.ui.toast(`${r.item.name} unlocked. Thanks for supporting Memefishing!`, 'good');
+    } catch {
+      this.ui.toast('Could not confirm the payment. Reload to try again.', 'bad');
+    }
+  }
+
   title() {
+    this.handleCheckoutReturn();
     document.getElementById('start-button').addEventListener('click', () => {
       this.sound.unlock();
       acceptBetaNotice(this.account);
@@ -449,6 +470,14 @@ class Game {
         }
         break;
       }
+      case 'store-card':
+        startCheckout(itemById(data.id), this.account)
+          .then((url) => {
+            this.save();
+            window.location.href = url;
+          })
+          .catch((e) => this.ui.toast(e.message, 'bad'));
+        return;
       case 'store-equip':
         if (equipSkin(this.account, itemById(data.id))) this.applySkins();
         break;
