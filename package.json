@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "economy:report": "node economy/report.ts",
+    "economy:sim": "node economy/simulate.ts"
   },
   "repository": {
     "type": "git",
@@ -16,6 +18,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=22.18"
+  },
   "dependencies": {
     "playcanvas": "^2.22.4"
   },

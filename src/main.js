@@ -14,7 +14,9 @@ import { RESULT_TEXT, createFight, fightReadout, stepFight } from './sim/fight.j
 import { SENTIMENT, changeOf, createMarket, quote, stepMarket } from './sim/market.js';
 import { WEATHER, clockLabel, createWorld, dayOf, daylight, hourOf, setClimate, stepWorld } from './sim/world.js';
 import { ALL_GEAR, BAG_SIZE, bridge, buy, catchXp, gear, levelOf, loadProfile, owns, recordCatch, repairCost, saveProfile, travel } from './sim/profile.js';
-import { loadAccount, rename, saveAccount } from './sim/account.js';
+import { acceptBetaNotice, loadAccount, rename, saveAccount } from './sim/account.js';
+import { CAST_MS, BAITS, canTopUp, loadCash, modeFor, playCast, playFrenzyBuy, saveCash, topUp } from './sim/cashwaters.js';
+import { addPlayTime, clearStats, loadStats, saveStats, startSession, track } from './sim/telemetry.js';
 import { buyWithReel, equipSkin, equippedSkin, itemById } from './sim/store.js';
 import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/events.js';
 import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
@@ -43,6 +45,10 @@ class Game {
     })();
     this.profile = loadProfile(this.storage);
     this.account = loadAccount(this.storage);
+    this.cash = loadCash(this.storage);
+    this.cashPending = null;
+    this.stats = loadStats(this.storage);
+    this.statsSavedAt = 0;
     this.world = createWorld(this.rng, 6 * 60 + 30);
     this.market = createMarket(this.rng);
     stepMarket(this.market, 90); // some price history before the first look
@@ -148,6 +154,30 @@ class Game {
   save() {
     saveProfile(this.storage, this.profile);
     saveAccount(this.storage, this.account);
+    saveCash(this.storage, this.cash);
+    saveStats(this.storage, this.stats);
+  }
+
+  // ---------- Cash Waters (play money, see src/sim/cashwaters.js) ----------
+  cashCast(frenzy) {
+    if (this.cashPending) return;
+    const mode = modeFor(this.profile.water);
+    const result = frenzy ? playFrenzyBuy(this.cash, mode, this.rng) : playCast(this.cash, mode, this.rng);
+    if (!result) {
+      this.ui.toast('Not enough play balance for that', 'bad');
+      return;
+    }
+    track(this.stats, frenzy ? 'cash-frenzy' : 'cash-cast', { quick: this.cash.quick, chum: this.cash.chum });
+    // The roll is settled and saved now; the reveal just takes its time.
+    const ms = this.cash.quick ? CAST_MS.quick : CAST_MS.full;
+    this.cashPending = { result, started: performance.now(), ms };
+    this.sound.cast();
+    setTimeout(() => {
+      this.cashPending = null;
+      this.ui.cashResult = result;
+      if (result.won > 0) this.sound.cash();
+      if (this.ui.panel === 'cash') this.ui.render();
+    }, ms);
   }
 
   applySkins() {
@@ -158,10 +188,9 @@ class Game {
   title() {
     document.getElementById('start-button').addEventListener('click', () => {
       this.sound.unlock();
-      if (!this.account.betaNoticeSeenAt) {
-        this.account.betaNoticeSeenAt = Date.now();
-        this.save();
-      }
+      acceptBetaNotice(this.account);
+      startSession(this.stats);
+      this.save();
       this.ui.showHud();
       this.state = 'idle';
       if (pc.platform.touch) document.getElementById('touch').classList.remove('hidden');
@@ -244,7 +273,7 @@ class Game {
         }
         return;
       }
-      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyO: 'missions', KeyH: 'help', KeyU: 'store' };
+      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyO: 'missions', KeyH: 'help', KeyU: 'store', KeyC: 'cash' };
       if (panels[k]) {
         if (this.ui.panel === panels[k]) this.ui.close();
         else this.ui.open(panels[k]);
@@ -414,6 +443,7 @@ class Game {
       case 'store-buy': {
         if (buyWithReel(p, this.account, itemById(data.id))) {
           this.sound.cash();
+          track(this.stats, 'purchase', { item: data.id, paidWith: 'reel', at: Date.now() });
           equipSkin(this.account, itemById(data.id));
           this.applySkins();
         }
@@ -421,6 +451,25 @@ class Game {
       }
       case 'store-equip':
         if (equipSkin(this.account, itemById(data.id))) this.applySkins();
+        break;
+      case 'cash-cast':
+      case 'cash-frenzy':
+        this.cashCast(name === 'cash-frenzy');
+        break;
+      case 'cash-bait':
+        if (!this.cashPending) this.cash.bait = Math.max(0, Math.min(BAITS.length - 1, Number(data.i)));
+        break;
+      case 'cash-toggle':
+        if (!this.cashPending && (data.key === 'quick' || data.key === 'chum')) this.cash[data.key] = !this.cash[data.key];
+        break;
+      case 'cash-topup':
+        if (canTopUp(this.cash) && topUp(this.cash)) this.ui.toast('Play balance topped up to 100', 'good');
+        break;
+      case 'open-beta':
+        this.ui.open('beta');
+        return;
+      case 'stats-clear':
+        this.stats = clearStats(this.storage);
         break;
       case 'rename': {
         const input = document.getElementById('account-name');
@@ -640,6 +689,7 @@ class Game {
     this.lure.settled = 0;
     this.whip = 1;
     this.state = 'flying';
+    track(this.stats, 'sim-cast');
     this.sound.cast();
     const model = lure.kind === 'float' ? this.floatModel : this.lureModel;
     model.entity.enabled = true;
@@ -994,6 +1044,13 @@ class Game {
   update(rawDt) {
     const dt = Math.min(rawDt, 0.05);
     const paused = this.state === 'title' || this.ui.modalOpen;
+    if (this.state !== 'title' && !document.hidden) {
+      addPlayTime(this.stats, rawDt);
+      if (performance.now() - this.statsSavedAt > 30000) {
+        this.statsSavedAt = performance.now();
+        saveStats(this.storage, this.stats);
+      }
+    }
 
     if (!paused && this.state !== 'catch') {
       const speed = this.fastForward && (this.state === 'idle' || this.state === 'waiting') ? 20 : 1;
