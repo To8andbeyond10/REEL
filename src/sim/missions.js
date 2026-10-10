@@ -32,7 +32,7 @@ const TEMPLATES = [
   () => ({ kind: 'trophy', target: 1, text: 'Land a Big or Trophy fish of any kind', reward: { meme: 150, xp: 100 } }),
   (rng) => {
     const total = round(range(rng, 150, 450), 50);
-    return { kind: 'sell', target: total, text: `Sell ${total} MEME of fish in one sale`, reward: { meme: round(total * 0.25, 5), xp: 50 } };
+    return { kind: 'sell', target: total, text: `Sell ${total} REEL of fish in one sale`, reward: { meme: round(total * 0.25, 5), xp: 50 } };
   },
   () => ({ kind: 'pumpSell', target: 1, text: 'Sell a fish while its coin is up 10% or more in the last hour', reward: { meme: 120, xp: 60 } }),
   (rng, water, resident) => {
@@ -101,7 +101,7 @@ export function missionSell(profile, s) {
 }
 
 export const missionLabel = (m) => {
-  if (m.kind === 'sell') return m.progress >= m.target ? 'Done' : `0/${m.target} MEME`;
+  if (m.kind === 'sell') return m.progress >= m.target ? 'Done' : `0/${m.target} REEL`;
   return `${m.progress}/${m.target}`;
 };
 

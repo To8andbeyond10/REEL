@@ -1,4 +1,4 @@
-// The fish market: every species trades like a memecoin. Prices are per kg in MEME,
+// The fish market: every species trades like a memecoin. Prices are per kg in REEL,
 // an in-game currency only. Moves once per game minute.
 import { SPECIES } from './data.js';
 import { clamp, gaussian, range } from './random.js';

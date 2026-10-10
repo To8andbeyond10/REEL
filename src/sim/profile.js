@@ -82,7 +82,7 @@ export const owns = (profile, id) => profile.owned.includes(id);
 export function canBuy(profile, item) {
   if (profile.owned.includes(item.id)) return { ok: false, why: 'Owned' };
   if (levelOf(profile.xp) < item.level) return { ok: false, why: `Level ${item.level}` };
-  if (profile.wallet < item.price) return { ok: false, why: 'Not enough MEME' };
+  if (profile.wallet < item.price) return { ok: false, why: 'Not enough REEL' };
   return { ok: true };
 }
 
@@ -99,7 +99,7 @@ export function canTravel(profile, spot) {
   if (spot.water !== profile.water) return { ok: false, why: 'Other water' };
   if (profile.spots.includes(spot.id)) return { ok: true };
   if (levelOf(profile.xp) < spot.level) return { ok: false, why: `Level ${spot.level}` };
-  if (profile.wallet < spot.price) return { ok: false, why: `${spot.price} MEME` };
+  if (profile.wallet < spot.price) return { ok: false, why: `${spot.price} REEL` };
   return { ok: true, cost: spot.price };
 }
 
@@ -120,7 +120,7 @@ export function canBridge(profile, waterId) {
   const water = waterById(waterId);
   if (profile.water === waterId) return { ok: false, why: 'You are here' };
   if (levelOf(profile.xp) < water.level) return { ok: false, why: `Level ${water.level}` };
-  if (profile.wallet < water.gas) return { ok: false, why: `${water.gas} MEME gas` };
+  if (profile.wallet < water.gas) return { ok: false, why: `${water.gas} REEL gas` };
   return { ok: true, cost: water.gas };
 }
 

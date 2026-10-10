@@ -331,11 +331,11 @@ export class Ui {
         : owned
           ? `<button data-action="equip" data-id="${i.id}" data-slot="${i.slot}">Equip</button>`
           : `<button class="primary" data-action="buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : check.why}</button>`;
-      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${i.name}</h3><div class="stats">${stats(i)}</div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${owned ? 'Owned' : `${fmt(i.price)} MEME · Lv ${i.level}`}</span>${btn}</div></div>`;
+      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${i.name}</h3><div class="stats">${stats(i)}</div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${owned ? 'Owned' : `${fmt(i.price)} REEL · Lv ${i.level}`}</span>${btn}</div></div>`;
     };
     const rod = byId(RODS, profile.loadout.rod);
     const repair = this.game.rodBroken
-      ? `<div class="item"><h3>Your rod is broken</h3><div class="note">${rod.name} snapped under load. Repair it before your next cast.</div><button class="primary" data-action="repair">Repair for ${repairCost(rod)} MEME</button></div>`
+      ? `<div class="item"><h3>Your rod is broken</h3><div class="note">${rod.name} snapped under load. Repair it before your next cast.</div><button class="primary" data-action="repair">Repair for ${repairCost(rod)} REEL</button></div>`
       : '';
     const floatRow = `<div class="slider"><span class="label">Float depth</span><input id="float-depth" type="range" min="0.3" max="12" step="0.1" value="${profile.floatDepth}"><strong>${profile.floatDepth.toFixed(1)} m</strong></div>`;
     return `${repair}<div class="tabs">${tabs.map(([k, l]) => `<button data-action="tab" data-tab="${k}" class="${this.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -362,7 +362,7 @@ export class Ui {
           .join('')}</table><div class="rest" style="margin-top:8px"><button class="primary" data-action="sell-all">Sell whole bag</button></div>`
       : '<p class="note">Your bag is empty. Catch something and bag it to sell here.</p>';
     const news = market.news.length ? market.news.map((n) => `<div class="${n.tone === 'bad' ? 'down' : 'up'}">${n.text}</div>`).join('') : '<div class="note">Quiet market.</div>';
-    return `<p class="note">Prices are MEME per kg and move every game minute. Sell into a pump, hold through a dip. A pump sends that fish into a feeding frenzy; a rug pull puts it off the bite. ${SENTIMENT[market.sentiment].label}${market.sentiment === 'bull' ? ': fish are hungrier.' : market.sentiment === 'bear' ? ': fish are sluggish.' : '.'} Faded rows don't live in ${water.name}.</p>
+    return `<p class="note">Prices are REEL per kg and move every game minute. Sell into a pump, hold through a dip. A pump sends that fish into a feeding frenzy; a rug pull puts it off the bite. ${SENTIMENT[market.sentiment].label}${market.sentiment === 'bull' ? ': fish are hungrier.' : market.sentiment === 'bear' ? ': fish are sluggish.' : '.'} Faded rows don't live in ${water.name}.</p>
       <table><tr><th>Species</th><th>Ticker</th><th>Price/kg</th><th>1h</th><th>Chart</th></tr>${rows}</table>
       <div class="section"><h3>Your bag (${profile.bag.length}/${BAG_SIZE})</h3>${bag}</div>
       <div class="section"><h3>News</h3>${news}</div>`;
@@ -397,14 +397,14 @@ export class Ui {
       const owned = profile.spots.includes(s.id);
       const btn = here
         ? '<button disabled>You are here</button>'
-        : `<button class="primary" data-action="travel" data-id="${s.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? (owned || !s.price ? 'Walk here' : `Unlock for ${s.price} MEME`) : check.why}</button>`;
+        : `<button class="primary" data-action="travel" data-id="${s.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? (owned || !s.price ? 'Walk here' : `Unlock for ${s.price} REEL`) : check.why}</button>`;
       return `<div class="spot ${here ? 'here' : ''}"><strong>${s.name}</strong><span class="note" style="margin:0">${s.blurb}</span>${btn}</div>`;
     }).join('');
     const waters = WATERS.map((w) => {
       const here = profile.water === w.id;
       const check = canBridge(profile, w.id);
       const fish = speciesIn(w).map((id) => speciesById(id)).filter((s) => s.rarity === 'legendary').map((s) => s.name).join(', ');
-      const btn = here ? '<button disabled>You are here</button>' : `<button class="primary" data-action="bridge" data-id="${w.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? (w.gas ? `Bridge · ${w.gas} MEME gas` : 'Go home · free') : check.why}</button>`;
+      const btn = here ? '<button disabled>You are here</button>' : `<button class="primary" data-action="bridge" data-id="${w.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? (w.gas ? `Bridge · ${w.gas} REEL gas` : 'Go home · free') : check.why}</button>`;
       return `<div class="spot water-card ${here ? 'here' : ''}"><strong>${w.name} <span class="badge">${w.chain}</span> <span class="badge">Lv ${w.level}</span></strong><span class="note" style="margin:0">${w.blurb}${fish ? ` Legend: ${fish}.` : ''}</span>${btn}</div>`;
     }).join('');
     return `<div class="map-wrap"><canvas id="lake-map" width="400" height="400"></canvas><div>${spots}
@@ -497,7 +497,7 @@ export class Ui {
     const missionCards = mine
       .map((m) => {
         const frac = m.kind === 'sell' ? 0 : m.progress / m.target;
-        return `<div class="item ${m.legendary ? 'legend' : ''}"><h3>${m.text}</h3><div class="bar"><div style="width:${frac * 100}%"></div></div><div class="foot"><span class="note" style="margin:0">${missionLabel(m)}</span><span class="price">+${fmt(m.reward.meme)} MEME · ${m.reward.xp} XP</span></div></div>`;
+        return `<div class="item ${m.legendary ? 'legend' : ''}"><h3>${m.text}</h3><div class="bar"><div style="width:${frac * 100}%"></div></div><div class="foot"><span class="note" style="margin:0">${missionLabel(m)}</span><span class="price">+${fmt(m.reward.meme)} REEL · ${m.reward.xp} XP</span></div></div>`;
       })
       .join('');
     const here = speciesIn(water);
@@ -511,7 +511,7 @@ export class Ui {
     if (d && !d.settled) {
       const table = standings(d);
       const status = derbyActive(d, world.minute) ? `Running · ends ${hhmm(d.end)}` : `Starts ${hhmm(d.start)}`;
-      derbyHtml = `<div class="item"><h3>Your derby: ${FORMATS[d.format].label} on ${WATERS.find((w) => w.id === d.water).name}</h3><div class="note" style="margin:0">${status} · Prize pool ${fmt(prizePool(d))} MEME (50/30/20)</div>
+      derbyHtml = `<div class="item"><h3>Your derby: ${FORMATS[d.format].label} on ${WATERS.find((w) => w.id === d.water).name}</h3><div class="note" style="margin:0">${status} · Prize pool ${fmt(prizePool(d))} REEL (50/30/20)</div>
         <table>${table.map((r, i) => `<tr class="${r.you ? 'you' : ''}"><td>${i + 1}</td><td>${r.name}</td><td class="num">${formatScore(d, r.score)}</td></tr>`).join('')}</table></div>`;
     } else {
       const list = upcomingDerbies(water.id, world.minute, 3);
@@ -519,7 +519,7 @@ export class Ui {
         .map((x) => {
           const running = world.minute >= x.start;
           const ok = profile.wallet >= x.fee;
-          return `<div class="item"><h3>${FORMATS[x.format].label}</h3><div class="stats"><span>Day <b>${Math.floor(x.start / 1440) + 1}</b></span><span>${running ? 'Running until' : 'Starts'} <b>${hhmm(running ? x.end : x.start)}</b></span><span>Pool <b>${fmt(prizePool(x))} MEME</b></span></div><div class="foot"><span class="price">Entry ${x.fee} MEME</span><button class="primary" data-action="derby-enter" data-id="${x.id}" ${ok ? '' : 'disabled'}>${ok ? (running ? 'Join late' : 'Enter') : 'Not enough MEME'}</button></div></div>`;
+          return `<div class="item"><h3>${FORMATS[x.format].label}</h3><div class="stats"><span>Day <b>${Math.floor(x.start / 1440) + 1}</b></span><span>${running ? 'Running until' : 'Starts'} <b>${hhmm(running ? x.end : x.start)}</b></span><span>Pool <b>${fmt(prizePool(x))} REEL</b></span></div><div class="foot"><span class="price">Entry ${x.fee} REEL</span><button class="primary" data-action="derby-enter" data-id="${x.id}" ${ok ? '' : 'disabled'}>${ok ? (running ? 'Join late' : 'Enter') : 'Not enough REEL'}</button></div></div>`;
         })
         .join('')}</div>`;
     }
@@ -541,7 +541,7 @@ export class Ui {
     }).join('');
     const st = profile.stats;
     const found = Object.keys(profile.journal).length;
-    return `<p class="note">${found}/${SPECIES.length} species · Caught ${st.caught} · Released ${st.released} · Sold ${st.sold} for ${fmt(st.earned)} MEME · Missions ${st.missions} · Derbies ${st.derbies} (${st.derbyWins} won)</p><div class="grid">${cards}</div>`;
+    return `<p class="note">${found}/${SPECIES.length} species · Caught ${st.caught} · Released ${st.released} · Sold ${st.sold} for ${fmt(st.earned)} REEL · Missions ${st.missions} · Derbies ${st.derbies} (${st.derbyWins} won)</p><div class="grid">${cards}</div>`;
   }
 
   help() {
@@ -565,7 +565,7 @@ export class Ui {
     this.el['catch-card'].innerHTML = `
       <div class="label">You landed</div>
       <h2>${s.name} <span class="ticker-tag">$${s.ticker}</span><span class="badge ${s.rarity}">${s.rarity}</span>${trophy ? `<span class="badge trophy">${trophy}</span>` : ''}</h2>
-      <div class="facts"><div><span class="label">Weight</span><strong>${weight.toFixed(2)} kg</strong></div><div><span class="label">Length</span><strong>${length} cm</strong></div><div><span class="label">Market value</span><strong class="price">${fmt(value)} MEME</strong></div></div>
+      <div class="facts"><div><span class="label">Weight</span><strong>${weight.toFixed(2)} kg</strong></div><div><span class="label">Length</span><strong>${length} cm</strong></div><div><span class="label">Market value</span><strong class="price">${fmt(value)} REEL</strong></div></div>
       <p class="caption">"${s.caption}" Real-world cousin: ${s.real}.</p>
       <div class="actions">
         <button class="primary" data-action="keep" ${bagFull ? 'disabled' : ''}>${bagFull ? 'Bag full' : `Bag it (+${xpKeep} XP)`}</button>

@@ -14,7 +14,7 @@ REEL today is a 2D side view with a 90 second arcade timer and one "hold to reel
 
 | Decision | Default | Why |
 |---|---|---|
-| Crypto layer | Purely an in-game economy. No real blockchain, wallet, token or real money. | Real tokens bring legal, app store and security baggage, and none of it is needed to make the twist fun. Easy to revisit later. |
+| Crypto layer | An in-game coin, REEL, earned by selling fish and spent on gear, travel and derbies. No payments, wallet or token are built yet. | Pricing and payment options are still being decided; see the monetization notes. |
 | Engine | PlayCanvas, browser, desktop first with touch controls | Robby's pick. Builds and tests here, playable link for anyone. |
 | Camera | First person from the bank or dock, like Fishing Planet | It is what makes it feel like a sim rather than an arcade game. |
 | Session | Open-ended days at a lake, no 90 second timer | Sims are about patience and conditions, not a countdown. |
@@ -86,7 +86,7 @@ REEL today is a 2D side view with a 90 second arcade timer and one "hold to reel
 **Fishing Planet:** XP and levels unlock gear and waters. Two currencies (one earned, one premium). Missions and competitions.
 
 **Memefishing:** the crypto twist lives here.
-- **Wallet:** your coin balance, shown like a wallet with a portfolio of bagged fish. Purely in-game.
+- **Wallet:** your REEL balance, shown like a wallet with a portfolio of bagged fish.
 - **Live fish market:** each species has a price per kg that moves over time (random walk with a trend). Sell into a pump, hold through a dip. Market sentiment (bull/bear) moves all prices together and slightly changes bites ("bull run: fish are hungry").
 - **Market events:** a "pump" spikes one species' price for a short time; a "rug pull" crashes one. Announced in a ticker across the top.
 - **XP and levels:** catches and releases give XP. Levels unlock gear in the Tackle Shop and new waters.

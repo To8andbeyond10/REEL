@@ -417,7 +417,7 @@ class Game {
         const d = upcomingDerbies(p.water, this.world.minute).find((x) => x.id === data.id);
         if (d && register(p, d)) {
           this.sound.cash();
-          this.ui.notice(`Registered for the ${this.water.name} derby. Fee ${d.fee} MEME.`, 'good');
+          this.ui.notice(`Registered for the ${this.water.name} derby. Fee ${d.fee} REEL.`, 'good');
         }
         break;
       }
@@ -457,14 +457,14 @@ class Game {
     p.stats.earned += total;
     if (total > 0) {
       this.sound.cash();
-      this.ui.toast(`+${total} MEME`, 'good');
+      this.ui.toast(`+${total} REEL`, 'good');
       this.missionsDone(missionSell(p, { water: p.water, total, changes }));
     }
   }
 
   missionsDone(done) {
     for (const m of done) {
-      this.ui.notice(`Mission complete: ${m.text}. +${m.reward.meme} MEME, +${m.reward.xp} XP`, 'good');
+      this.ui.notice(`Mission complete: ${m.text}. +${m.reward.meme} REEL, +${m.reward.xp} XP`, 'good');
       this.sound.landed();
     }
     if (done.length) ensureMissions(this.profile, this.profile.water, this.rng);
@@ -498,7 +498,7 @@ class Game {
       this.advanceMinutes(30);
       this.ui.fade(false);
       this.ui.toast(this.water.name);
-      this.ui.notice(gas ? `Bridged to ${this.water.name}. Gas: ${gas} MEME` : `Back home on ${this.water.name}`, 'good');
+      this.ui.notice(gas ? `Bridged to ${this.water.name}. Gas: ${gas} REEL` : `Back home on ${this.water.name}`, 'good');
     }, 450);
   }
 
@@ -532,7 +532,7 @@ class Game {
       const res = settleDerby(this.profile, this.world.minute);
       if (res) {
         const place = ['1st', '2nd', '3rd'][res.rank - 1] || `${res.rank}th`;
-        this.ui.notice(res.prize ? `Derby over: you placed ${place} and won ${res.prize} MEME (+${res.xp} XP)` : `Derby over: you placed ${place}. ${res.xp ? `+${res.xp} XP` : 'Better luck next time.'}`, res.prize ? 'good' : 'bad');
+        this.ui.notice(res.prize ? `Derby over: you placed ${place} and won ${res.prize} REEL (+${res.xp} XP)` : `Derby over: you placed ${place}. ${res.xp ? `+${res.xp} XP` : 'Better luck next time.'}`, res.prize ? 'good' : 'bad');
         if (res.prize) this.sound.cash();
         this.save();
       }
