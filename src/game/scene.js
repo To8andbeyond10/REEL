@@ -715,7 +715,8 @@ export class WorldScene {
     const sunUp = clamp(sunDir.y * 5, 0, 1);
     const moonUp = clamp(moonDir.y * 4, 0, 1);
     const sunI = 2.1 * sunUp * (1 - overcast * 0.72) * (1 - look.dark * 0.5);
-    const moonI = 0.32 * moonUp * (1 - overcast * 0.6);
+    // Cloud dims the moon less than the sun: a storm night should stay readable, not go black.
+    const moonI = 0.32 * moonUp * (1 - overcast * 0.35);
     const night = sunDir.y < 0.0;
     const lightDir = night ? moonDir : sunDir;
     this.sunLight.setPosition(lightDir.clone().mulScalar(100));
@@ -730,7 +731,7 @@ export class WorldScene {
 
     // A gentle auto exposure, like eyes adjusting: dim scenes are lifted, bright snow is held back.
     const sceneLight = lum(sky.ambient) + 0.35 * this.lightIntensity * lum(lc);
-    this.app.scene.exposure = clamp(Math.pow(1.4 / Math.max(sceneLight, 0.01), 0.3), 0.85, 2.3) * (pal.snow ? 0.8 : 1);
+    this.app.scene.exposure = clamp(Math.pow(1.4 / Math.max(sceneLight, 0.01), 0.3), 0.85, 2.6) * (pal.snow ? 0.8 : 1);
 
     this.waterSurface.setLight({
       sunDir: lightDir,
