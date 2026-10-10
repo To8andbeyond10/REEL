@@ -294,6 +294,10 @@ class Game {
         }
         return;
       }
+      if (k === 'KeyV' && !e.repeat) {
+        this.ui.toggleCleanView();
+        return;
+      }
       const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyO: 'missions', KeyH: 'help', KeyU: 'store', KeyC: 'cash' };
       if (panels[k]) {
         if (this.ui.panel === panels[k]) this.ui.close();

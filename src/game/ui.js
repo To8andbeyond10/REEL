@@ -12,6 +12,7 @@ import { FLAGS } from '../sim/flags.js';
 import { BADGES } from '../sim/account.js';
 import { BAITS, CATCH_LOOK, canTopUp, castCost, frenzyCost, modeFor, stakeOf } from '../sim/cashwaters.js';
 import { summary, track } from '../sim/telemetry.js';
+import { hudClasses, loadHudView, saveHudView, toggleClean, toggleFold } from './hudview.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -46,6 +47,15 @@ export class Ui {
     this.lastNews = null;
     this.tickerAt = -1;
 
+    this.view = loadHudView(game.storage);
+    this.applyView();
+    document.querySelectorAll('[data-fold]').forEach((b) => b.addEventListener('click', () => this.setView(toggleFold(this.view, b.dataset.fold))));
+    $('clean-button').addEventListener('click', () => this.toggleCleanView());
+    $('menu-toggle').addEventListener('click', () => this.el.hud.classList.toggle('menu-open'));
+    // Picking something from the folded menu closes it again.
+    document.querySelector('.menu-bar').addEventListener('click', (e) => {
+      if (e.target.closest('button') && !e.target.closest('#menu-toggle')) this.el.hud.classList.remove('menu-open');
+    });
     document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => this.open(b.dataset.panel)));
     $('modal-close').addEventListener('click', () => this.close());
     this.el['modal-body'].addEventListener('click', (e) => {
@@ -59,6 +69,25 @@ export class Ui {
       const t = e.target.closest('[data-action]');
       if (t) this.game.action(t.dataset.action, t.dataset);
     });
+  }
+
+  applyView() {
+    const hud = this.el.hud;
+    for (const c of [...hud.classList]) if (c === 'clean' || c.startsWith('fold-')) hud.classList.remove(c);
+    hud.classList.add(...hudClasses(this.view));
+    $('clean-button').classList.toggle('on', this.view.clean);
+  }
+
+  setView(view) {
+    this.view = view;
+    saveHudView(this.game.storage, view);
+    this.applyView();
+  }
+
+  toggleCleanView() {
+    this.setView(toggleClean(this.view));
+    this.el.hud.classList.remove('menu-open');
+    this.toast(this.view.clean ? 'Clean view on. Press V to bring everything back.' : 'Clean view off');
   }
 
   get modalOpen() {
@@ -648,7 +677,7 @@ export class Ui {
       <div class="item"><h3>Waters</h3><div class="note">Bridge to Shitcoin Swamp, Bull Run River and Cold Wallet Lake from the Map (M). Each has its own fish, weather and a legendary.</div></div>
       <div class="item"><h3>Live events</h3><div class="note">Whale alerts mean a legendary is boiling nearby. Diving birds mark a bait ball. Pumps start feeding frenzies; storms make fish feed hard before they hit.</div></div>
       <div class="item"><h3>Missions and derbies</h3><div class="note">Open Missions (O) for contracts on each water and four-hour derbies against rival anglers.</div></div>
-      <div class="item"><h3>Extras</h3><div class="note">Fish finder: buy it in Tackle, toggle with K. Photo mode: P, then click or Space to snap. Time ×20: Z.</div></div>
+      <div class="item"><h3>Extras</h3><div class="note">Fish finder: buy it in Tackle, toggle with K. Photo mode: P, then click or Space to snap. Time ×20: Z. Clean view: V hides everything you don't need to fish; the – button on a panel folds just that one.</div></div>
     </div>`;
   }
 

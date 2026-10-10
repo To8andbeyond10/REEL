@@ -303,3 +303,23 @@ table.odds { width: 100%; border-collapse: collapse; font-size: 13px; margin-top
 table.odds td, table.odds th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line); }
 .beta-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; }
 @media (max-width: 600px) { .cash-balance { text-align: left; } }
+/* Folding HUD panels (src/game/hudview.js). */
+.panel .fold { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; border-radius: 5px; font-size: 13px; line-height: 1; background: transparent; color: var(--muted); opacity: 0.6; }
+.panel .fold:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+.left-stack .top-left, .right-stack .gear { position: relative; }
+.hud.fold-info .top-left .row { display: none; }
+.hud.fold-wallet .top-right > :not(.wallet):not(.fold) { display: none; }
+.hud.fold-gear .gear .gear-line { display: none; }
+.hud.fold-info .top-left, .hud.fold-wallet .top-right { min-width: 0; padding-right: 30px; }
+.hud.fold-gear .gear { width: auto; padding-right: 30px; }
+.hud.fold-info .fold[data-fold='info'], .hud.fold-wallet .fold[data-fold='wallet'], .hud.fold-gear .fold[data-fold='gear'] { opacity: 0.9; }
+.hud.clean .ticker, .hud.clean .events, .hud.clean .derby, .hud.clean .news div:not(.notice) { display: none; }
+.menu-toggle { display: none; }
+.hud.clean .menu-toggle { display: inline-block; }
+.hud.clean:not(.menu-open) .menu-bar > button:not(.menu-toggle) { display: none; }
+#clean-button.on { background: var(--accent); color: #1a1406; }
+@media (max-width: 760px) {
+  .hud.clean .left-stack, .hud.clean .top-right { top: 8px; }
+  .gear .fold { display: none; }
+}
+.hud.fold-gear .gear .settings { margin-top: 0; border-top: 0; padding-top: 0; }

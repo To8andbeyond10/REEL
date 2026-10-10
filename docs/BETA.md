@@ -11,6 +11,10 @@ Memefishing's Phase 1 beta runs on play money. It's for working out features and
 - **Two modes.** Sim mode is the fishing game itself. **Cash Waters** (`src/sim/cashwaters.js`, C in game) is the paytable game from `economy/`, on a play balance.
 - **Beta stats** (`src/sim/telemetry.js`): sessions, days played, play time, Sim and Cash Waters casts, Quick Cast share, panels opened and store purchases. They stay in the browser; the player can see, download or delete them from the Store. Nothing is sent anywhere.
 
+## Clean view
+
+Press **V** (or the Clean view button) to hide everything you don't need while fishing: the price ticker, news, alerts, derby standings, weather and spot details, wallet details, the gear list and the menu bar, which folds into one Menu button. The clock, wallet, drag, reel speed, depth, fish finder, cast and fight meters stay. Each corner panel also has a – button to fold just that one. The choice is remembered (`src/game/hudview.js`).
+
 ## Cash Waters on play money
 
 - Each water plays one of the economy's modes: Genesis Lake uses Shallows, the swamp and river use Open Sea, and the cold water uses Abyss.
