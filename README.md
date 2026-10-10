@@ -26,7 +26,7 @@ The design is in [docs/DESIGN.md](docs/DESIGN.md) and what comes next is in [doc
 - **Wildlife and photos:** gulls, bats, fireflies, frogs and rising fish. Photo mode and captioned trophy photos.
 - XP and levels unlock gear, spots and waters. Fish journal. Procedural sound. Saves in the browser.
 
-MEME is an in-game currency only. There is no blockchain, wallet or real money.
+REEL is an in-game currency only. There is no blockchain, wallet or real money.
 
 ## Run locally
 

@@ -1,6 +1,6 @@
 # Memefishing: top-tier feature roadmap
 
-What a top-tier fishing game needs to keep players coming back, what this build already has, and what to build next, in order. Fishing Planet is the reference for how the game should play and feel; nothing here copies its names, art or assets. MEME stays an in-game currency with no blockchain, wallet or real money.
+What a top-tier fishing game needs to keep players coming back, what this build already has, and what to build next, in order. Fishing Planet is the reference for how the game should play and feel; nothing here copies its names, art or assets. REEL stays an in-game currency with no blockchain, wallet or real money.
 
 ## Shipped in this build
 
@@ -48,14 +48,14 @@ What a top-tier fishing game needs to keep players coming back, what this build 
    - bait you catch yourself, so small fish become live bait.
 6. **Trophy room.** Mount your best fish, keep a record book per species and water, and add achievements and a keepnet aquarium.
 7. **Multiplayer and clubs.** Shared waters, real leaderboards, live derbies against real players and fishing clubs. Derbies need server authority first (see below).
-8. **Live-ops loop.** Daily and weekly challenges, a seasonal pass with cosmetic rewards (rod skins, float colours, outfits) and rotating "chain events", all in MEME.
+8. **Live-ops loop.** Daily and weekly challenges, a seasonal pass with cosmetic rewards (rod skins, float colours, outfits) and rotating "chain events", all in REEL.
 9. **Controls and access.** Gamepad with rumble on bites and drag slip, remappable keys, a colourblind-safe tension meter and subtitles for audio cues.
 10. **Audio.** Recorded ambience per water, a real reel click and drag scream, and adaptive music for fights and derbies.
 
 ## Crypto layer ideas (all in-game)
 
-- Prediction market: stake MEME on which coin pumps next or who wins a derby.
-- Liquidity pools: lock MEME for a day for a share of derby fees.
+- Prediction market: stake REEL on which coin pumps next or who wins a derby.
+- Liquidity pools: lock REEL for a day for a share of derby fees.
 - Rare catches move the market. Landing a legendary pumps its coin for everyone on the server.
 - "Proof of catch" certificates in the trophy room: in-game only, with no tokens.
 
