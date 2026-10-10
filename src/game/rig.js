@@ -125,7 +125,12 @@ export function buildFish(app, species) {
   const head = bodyLen / 2;
   part(root, 'sphere', body, [0.24, deep, bodyLen], [0, 0.02, 0]);
   part(root, 'sphere', belly, [0.2, deep * 0.7, bodyLen * 0.84], [0, -0.05, 0.02]);
-  part(root, 'cone', fin, [0.04, 0.26, 0.3], [0, 0, -head - 0.08], [-90, 0, 0]);
+  // The tail hangs from a joint inside the rear of the body, so it can wag (see swimFish).
+  const tail = new pc.Entity('tail');
+  tail.setLocalPosition(0, 0, -head * 0.6);
+  root.addChild(tail);
+  part(tail, 'cone', fin, [0.04, 0.26, 0.3], [0, 0, -head * 0.4 - 0.08], [-90, 0, 0]);
+  root.tail = tail;
   part(root, 'box', fin, [0.02, deep * 0.5, bodyLen * 0.42], [0, deep * 0.5, -0.02]);
   for (const s of [-1, 1]) {
     part(root, 'sphere', dark, [0.04, 0.04, 0.04], [s * 0.1, 0.05, head * 0.77]);
@@ -141,6 +146,14 @@ export function buildFish(app, species) {
   app.root.addChild(root);
   root.enabled = false;
   return root;
+}
+
+// Wags the tail: slow and wide when the fish is held, quicker and livelier while it fights.
+export function swimFish(model, time, pace = 1) {
+  const tail = model.tail;
+  if (!tail) return;
+  const ph = time * (2.2 + 3 * pace) * Math.PI * 2;
+  tail.setLocalEulerAngles(0, Math.sin(ph) * (12 + 8 * pace), 0);
 }
 
 export class Effects {

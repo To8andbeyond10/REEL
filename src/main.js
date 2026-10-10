@@ -1,8 +1,9 @@
 // Memefishing: first-person fishing sim. Wires the sim rules (src/sim) to the 3D world and HUD (src/game).
 import * as pc from 'playcanvas';
 import { WorldScene } from './game/scene.js';
+import { QUALITY, Renderer, saveQuality } from './game/render.js';
 import { Life } from './game/life.js';
-import { Effects, FloatBobber, Lure, Rod, buildFish } from './game/rig.js';
+import { Effects, FloatBobber, Lure, Rod, buildFish, swimFish } from './game/rig.js';
 import { Ui } from './game/ui.js';
 import { Sound } from './game/audio.js';
 import { SPECIES } from './sim/data.js';
@@ -69,16 +70,15 @@ class Game {
     });
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
-    this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio, 2);
     this.app.start();
 
     this.camera = new pc.Entity('camera');
     this.camera.addComponent('camera', { fov: 62, nearClip: 0.05, farClip: 1500, clearColor: new pc.Color(0.5, 0.7, 0.9) });
-    this.camera.camera.toneMapping = pc.TONEMAP_ACES;
-    this.camera.camera.gammaCorrection = pc.GAMMA_SRGB;
     this.app.root.addChild(this.camera);
 
-    this.scene = new WorldScene(this.app);
+    this.scene = new WorldScene(this.app, this.camera);
+    this.renderer = new Renderer(this.app, this.camera);
+    this.applyQuality(this.renderer.level);
     this.rod = new Rod(this.camera);
     this.floatModel = new FloatBobber(this.app);
     this.lureModel = new Lure(this.app);
@@ -280,6 +280,12 @@ class Game {
     document.getElementById('photo-button').addEventListener('click', () => this.togglePhoto());
     document.getElementById('photo-snap').addEventListener('click', () => this.snapPhoto());
     document.getElementById('photo-exit').addEventListener('click', () => this.togglePhoto());
+    document.getElementById('quality-button').addEventListener('click', () => {
+      const levels = Object.keys(QUALITY);
+      const next = levels[(levels.indexOf(this.renderer.level) + 1) % levels.length];
+      saveQuality(next);
+      this.applyQuality(next);
+    });
     document.getElementById('mute-button').addEventListener('click', (e) => {
       e.currentTarget.textContent = this.sound.toggle() ? 'Sound off' : 'Sound';
     });
@@ -544,6 +550,17 @@ class Game {
     if (!force && m === this.envMinute) return;
     this.envMinute = m;
     this.scene.setEnvironment(hourOf(this.world), this.world.weather);
+    this.renderer.setGrade(this.scene.grade);
+  }
+
+  // Graphics quality: post effects, anti-aliasing, mirror reflections on the water, shadow detail.
+  applyQuality(level) {
+    this.renderer.set(level);
+    const q = this.renderer.q;
+    this.scene.waterSurface.setPlanar(q.reflection === 'planar');
+    this.scene.sunLight.light.shadowResolution = q.shadowRes;
+    const button = document.getElementById('quality-button');
+    if (button) button.textContent = `Graphics: ${q.label}`;
   }
 
   // ---------- fishing loop ----------
@@ -821,6 +838,7 @@ class Game {
     const away = f.fishVel >= 0 ? 1 : -1;
     model.lookAt(pos.x + dx * away, pos.y + (this.fish.jumpT > 0 ? 0.6 : 0), pos.z + dz * away);
     model.rotateLocal(0, 180, Math.sin(performance.now() / 90) * 8);
+    swimFish(model, performance.now() / 1000, 1.4);
     if (f.events.includes('shake') && pos.y > -0.8) this.effects.ripple(pos, 0.5);
     if (f.fishDepth < 0.5 && Math.random() < dt * 3) this.effects.ripple(pos, 0.3);
     this.fishPos = pos;
@@ -875,6 +893,7 @@ class Game {
     m.setPosition(pos);
     m.lookAt(pos.clone().add(right));
     m.rotateLocal(Math.sin(performance.now() / 700) * 4, 0, 8 + Math.sin(performance.now() / 160) * 3);
+    swimFish(m, performance.now() / 1000, 0.4);
   }
 
   finishCatch(choice) {

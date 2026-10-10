@@ -2,6 +2,9 @@
 // build(water) throws away the last water's meshes and builds the new one from src/sim/waters.js.
 import * as pc from 'playcanvas';
 import { GeoBuilder, meshEntity, solidMaterial, vertexColorMaterial } from './geometry.js';
+import { Sky } from './sky.js';
+import { setWind, windMaterial } from './wind.js';
+import { WaterSurface, waveHeight } from './water.js';
 import { WEATHER, daylight, sunAngle } from '../sim/world.js';
 import { clamp, createRng, lerp, range } from '../sim/random.js';
 
@@ -9,14 +12,18 @@ const TAU = Math.PI * 2;
 const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const scale3 = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
 const SNOW = [0.9, 0.93, 0.97];
+// Engine colours (lights, fog) are given in sRGB; the sky works in linear light.
+const toGamma = (c) => c.map((v) => Math.pow(Math.max(v, 0), 1 / 2.2));
+const lum = (c) => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
 
-const SKY = {
-  dayZenith: [0.22, 0.45, 0.86],
-  dayHorizon: [0.72, 0.84, 0.95],
-  duskZenith: [0.24, 0.27, 0.5],
-  duskHorizon: [0.96, 0.7, 0.52],
-  nightZenith: [0.015, 0.025, 0.07],
-  nightHorizon: [0.05, 0.07, 0.13]
+// Clouds, darkness and haze per weather, on top of WEATHER's overcast and fog.
+const SKY_WEATHER = {
+  sunny: { cover: 0.32, cloudOpacity: 0.95, dark: 0 },
+  cloudy: { cover: 0.72, cloudOpacity: 1, dark: 0.1 },
+  rain: { cover: 0.9, cloudOpacity: 1, dark: 0.4 },
+  storm: { cover: 1, cloudOpacity: 1, dark: 0.85 },
+  fog: { cover: 0.6, cloudOpacity: 0.25, dark: 0.05 },
+  snow: { cover: 0.85, cloudOpacity: 1, dark: 0.2 }
 };
 
 function hash(str) {
@@ -36,7 +43,7 @@ function gridIndices(g, nx, nz) {
 }
 
 export class WorldScene {
-  constructor(app) {
+  constructor(app, camera) {
     this.app = app;
     this.device = app.graphicsDevice;
     this.time = 0;
@@ -51,13 +58,14 @@ export class WorldScene {
     this.fxRng = createRng(99);
     this.terrainMaterial = vertexColorMaterial({ gloss: 0.15 });
     this.floraMaterial = vertexColorMaterial({ gloss: 0.1 });
+    windMaterial(this.device, this.floraMaterial);
     this.propMaterial = vertexColorMaterial({ gloss: 0.25, specular: 0.08 });
     this.farMaterial = vertexColorMaterial({ gloss: 0 });
     this.lanternMaterial = solidMaterial('#ffcf7a', { emissive: 1 });
     this.buildLights();
-    this.buildSky();
-    this.buildCloudMaterial();
-    this.buildWaterMaterial();
+    this.sky = new Sky(app);
+    this.waterSurface = new WaterSurface(app, camera);
+    this.grade = { saturation: 1, contrast: 1, brightness: 1, tint: [1, 1, 1] };
     this.rain = Array.from({ length: 520 }, () => new pc.Vec3(0, -99, 0));
     this.snow = Array.from({ length: 500 }, () => new pc.Vec3(0, -99, 0));
     this.rainColor = new pc.Color(0.75, 0.8, 0.88, 0.5);
@@ -81,72 +89,6 @@ export class WorldScene {
     this.sunLight = sun;
     this.app.scene.fog.type = pc.FOG_EXP2;
     this.app.scene.fog.density = 0.004;
-  }
-
-  buildSky() {
-    const g = new GeoBuilder();
-    const segs = 32;
-    const rings = 16;
-    this.skyHeights = [];
-    for (let r = 0; r <= rings; r += 1) {
-      const v = (r / rings) * Math.PI * 0.6;
-      for (let s = 0; s <= segs; s += 1) {
-        const u = (s / segs) * TAU;
-        const x = Math.sin(v) * Math.cos(u);
-        const y = Math.cos(v);
-        const z = Math.sin(v) * Math.sin(u);
-        g.vertex([x * 900, y * 900, z * 900], [-x, -y, -z], [1, 1, 1]);
-        this.skyHeights.push(y);
-      }
-    }
-    gridIndices(g, segs, rings);
-    this.skyMesh = g.build(this.device);
-    this.skyColors = new Uint8Array(g.colors);
-    this.skyMaterial = vertexColorMaterial({ unlit: true, fog: false });
-    this.sky = meshEntity(this.app, 'sky', this.skyMesh, this.skyMaterial, { receiveShadows: false });
-
-    const disc = (name, color, size) => {
-      const e = new pc.Entity(name);
-      const m = new pc.StandardMaterial();
-      m.useLighting = false;
-      m.diffuse = new pc.Color(0, 0, 0);
-      m.emissive = new pc.Color().fromString(color);
-      m.useFog = false;
-      m.update();
-      e.addComponent('render', { type: 'sphere', material: m, castShadows: false, receiveShadows: false });
-      e.setLocalScale(size, size, size);
-      this.app.root.addChild(e);
-      return e;
-    };
-    this.sunDisc = disc('sun-disc', '#fff4d6', 40);
-    this.moonDisc = disc('moon-disc', '#dfe6f2', 24);
-  }
-
-  buildCloudMaterial() {
-    const m = new pc.StandardMaterial();
-    m.useLighting = false;
-    m.diffuse = new pc.Color(0, 0, 0);
-    m.emissiveVertexColor = true;
-    m.emissive = new pc.Color(1, 1, 1);
-    m.opacity = 0.85;
-    m.blendType = pc.BLEND_NORMAL;
-    m.depthWrite = false;
-    m.useFog = false;
-    m.update();
-    this.cloudMaterial = m;
-  }
-
-  buildWaterMaterial() {
-    const m = new pc.StandardMaterial();
-    m.diffuse = new pc.Color(1, 1, 1);
-    m.diffuseVertexColor = true;
-    m.specular = new pc.Color(0.9, 0.9, 0.9);
-    m.gloss = 0.93;
-    m.opacity = 0.84;
-    m.blendType = pc.BLEND_NORMAL;
-    m.emissive = new pc.Color(0.1, 0.12, 0.15);
-    m.update();
-    this.waterMaterial = m;
   }
 
   // ---------- per water ----------
@@ -173,7 +115,6 @@ export class WorldScene {
     this.buildShore();
     this.buildProps();
     this.buildDistance();
-    this.buildClouds();
   }
 
   clear() {
@@ -317,85 +258,14 @@ export class WorldScene {
       x0 = z0 = -(r + 6);
       x1 = z1 = r + 6;
     }
-    const step = s.kind === 'river' ? 2.5 : 2.2;
-    const nx = Math.ceil((x1 - x0) / step);
-    const nz = Math.ceil((z1 - z0) / step);
-    const [shallowC, deepC] = this.pal.water;
-    const g = new GeoBuilder();
-    const amp = [];
-    for (let i = 0; i <= nz; i += 1) {
-      for (let j = 0; j <= nx; j += 1) {
-        const x = x0 + j * step;
-        const z = z0 + i * step;
-        const d = s.depthAt(x, z);
-        let c = mix(shallowC, deepC, clamp(d / 5, 0, 1));
-        if (s.kind === 'river' && d > 0) {
-          // White water where it runs fast and shallow.
-          const speed = s.flow(x, z).speed;
-          c = mix(c, [0.78, 0.84, 0.86], clamp((speed - 0.45) * 1.3, 0, 0.55) * clamp(1.6 - d * 0.5, 0, 1));
-        }
-        g.vertex([x, d > 0 ? 0 : -0.06, z], [0, 1, 0], c);
-        // Smaller waves in the shallows, none over land.
-        amp.push(d > 0 ? clamp(0.3 + d / 2, 0.3, 1) : 0);
-      }
-    }
-    gridIndices(g, nx, nz);
-    this.waterBase = new Float32Array(g.positions);
-    this.waterPositions = new Float32Array(g.positions);
-    this.waterNormals = new Float32Array(g.normals);
-    this.waterAmp = new Float32Array(amp);
-    this.waterMesh = g.build(this.device);
-    this.waterMaterial.opacity = this.pal.opacity;
-    this.waterMaterial.update();
-    this.waterEntity = meshEntity(this.app, 'water', this.waterMesh, this.waterMaterial, { receiveShadows: true });
-    this.parts.push(this.waterEntity);
+    this.waterSurface.build(s, { x0, x1, z0, z1 }, s.kind === 'river' ? 1.4 : 1.25, this.pal);
   }
 
+  // Height of the water surface, matching the waves drawn on the GPU (smaller in the shallows).
   waveHeight(x, z, t) {
-    const s = this.waveStrength;
-    const xs = x - t * this.drift;
-    let y = 0.045 * Math.sin(xs * 0.35 + t * 1.4) + 0.035 * Math.sin(z * 0.42 - t * 1.1 + xs * 0.1) + 0.02 * Math.sin((xs + z) * 0.9 + t * 2.3);
-    if (this.drift) y += 0.03 * Math.sin(xs * 1.6 + z * 0.4 + t * 3);
-    return s * y;
-  }
-
-  updateWater(t) {
-    const p = this.waterPositions;
-    const nrm = this.waterNormals;
-    const base = this.waterBase;
-    const amp = this.waterAmp;
-    const s = this.waveStrength;
-    const river = this.drift !== 0;
-    for (let i = 0, v = 0; i < p.length; i += 3, v += 1) {
-      const k = amp[v];
-      if (!k) continue;
-      const x = base[i];
-      const z = base[i + 2];
-      const xs = x - t * this.drift;
-      const a1 = Math.cos(xs * 0.35 + t * 1.4);
-      const a2 = Math.cos(z * 0.42 - t * 1.1 + xs * 0.1);
-      const a3 = Math.cos((xs + z) * 0.9 + t * 2.3);
-      let y = 0.045 * Math.sin(xs * 0.35 + t * 1.4) + 0.035 * Math.sin(z * 0.42 - t * 1.1 + xs * 0.1) + 0.02 * Math.sin((xs + z) * 0.9 + t * 2.3);
-      let dx = 0.045 * 0.35 * a1 + 0.035 * 0.1 * a2 + 0.02 * 0.9 * a3;
-      let dz = 0.035 * 0.42 * a2 + 0.02 * 0.9 * a3;
-      if (river) {
-        const a4 = xs * 1.6 + z * 0.4 + t * 3;
-        y += 0.03 * Math.sin(a4);
-        dx += 0.03 * 1.6 * Math.cos(a4);
-        dz += 0.03 * 0.4 * Math.cos(a4);
-      }
-      const m = s * k;
-      p[i + 1] = y * m;
-      dx *= m;
-      dz *= m;
-      const len = Math.hypot(dx, 1, dz);
-      nrm[i] = -dx / len;
-      nrm[i + 1] = 1 / len;
-      nrm[i + 2] = -dz / len;
-    }
-    this.waterMesh.setPositions(p);
-    this.waterMesh.setNormals(nrm);
-    this.waterMesh.update(pc.PRIMITIVE_TRIANGLES, false);
+    const d = this.shape.depthAt(x, z);
+    const amp = d > 0 ? clamp(0.3 + d / 2, 0.3, 1) : 0;
+    return waveHeight(x, z, t, this.waveStrength, this.drift) * amp;
   }
 
   // ---------- trees ----------
@@ -433,6 +303,8 @@ export class WorldScene {
   tree(g, type, x, y, z, rng, wet = false) {
     const sc = range(rng, 0.7, 1.5);
     const tint = range(rng, 0.85, 1.15);
+    // Trunks stay put at the root; the crown sways.
+    g.sway(y, 9 * sc);
     if (type === 'mixed') {
       if (rng() < 0.62) this.conifer(g, x, y, z, sc, tint, rng, false);
       else this.broadleaf(g, x, y, z, sc, tint, rng);
@@ -545,10 +417,12 @@ export class WorldScene {
         const h = range(rng, 1.1, 2.4);
         const c = rng() < 0.3 ? [0.55, 0.5, 0.3] : [0.3, 0.42, 0.18];
         const lean = [range(rng, -0.25, 0.25), range(rng, -0.25, 0.25)];
+        g.sway(y, h + Math.max(0, d));
         g.blade(x, y, z, 0.09, h + Math.max(0, d), lean, c);
         // Cattail heads.
         if (rng() < 0.12) g.frustum(x + lean[0] * 0.85, y + (h + Math.max(0, d)) * 0.82, z + lean[1] * 0.85, 0.045, 0.045, 0.28, [0.36, 0.22, 0.12], 5);
       }
+      g.sway(0, 0);
     }
 
     // Lily pads: either a bay or all over the shallows.
@@ -582,8 +456,11 @@ export class WorldScene {
       if (this.nearSpot(p.x, p.z, 2.2)) continue;
       if (s.kind === 'river' && this.slopeAt(p.x, p.z) > 0.6) continue;
       const y = s.groundHeight(p.x, p.z);
-      g.blade(p.x, y - 0.02, p.z, 0.12, range(rng, 0.3, 0.7), [range(rng, -0.15, 0.15), range(rng, -0.15, 0.15)], scale3(grassC, range(rng, 0.85, 1.15)));
+      const h = range(rng, 0.3, 0.7);
+      g.sway(y - 0.02, h);
+      g.blade(p.x, y - 0.02, p.z, 0.12, h, [range(rng, -0.15, 0.15), range(rng, -0.15, 0.15)], scale3(grassC, range(rng, 0.85, 1.15)));
     }
+    g.sway(0, 0);
 
     // Rocks clustered on a point.
     if (f.rocks) {
@@ -774,7 +651,7 @@ export class WorldScene {
     g.blob(cx - f.x * 2.4, deck + 0.35, cz - f.z * 2.4, 2, 0.25, 2.4, SNOW, 8, 3, 0.05);
   }
 
-  // ---------- horizon and clouds ----------
+  // ---------- horizon ----------
   buildDistance() {
     const g = new GeoBuilder();
     const rng = this.rng;
@@ -808,95 +685,73 @@ export class WorldScene {
     this.add('distance', g, this.farMaterial, { receiveShadows: false });
   }
 
-  buildClouds() {
-    const c = new GeoBuilder();
-    const rng = this.rng;
-    for (let i = 0; i < 26; i += 1) {
-      const a = rng() * TAU;
-      const r = range(rng, 150, 520);
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      const y = range(rng, 140, 220);
-      for (let k = 0; k < 4; k += 1) {
-        c.blob(x + range(rng, -40, 40), y + range(rng, -6, 6), z + range(rng, -25, 25), range(rng, 25, 55), range(rng, 8, 16), range(rng, 18, 35), [1, 1, 1], 10, 6, 0.3);
-      }
-    }
-    this.add('clouds', c, this.cloudMaterial, { receiveShadows: false });
-  }
-
   // ---------- light and weather ----------
   setEnvironment(hour, weatherId) {
     const w = WEATHER[weatherId] || WEATHER.sunny;
+    const look = SKY_WEATHER[weatherId] || SKY_WEATHER.sunny;
     const pal = this.pal;
     const d = daylight(hour);
-    const tw = clamp(Math.exp(-(((hour - 6) / 1.1) ** 2)) + Math.exp(-(((hour - 19.6) / 1.1) ** 2)), 0, 1);
-    const grey = (c, amount) => {
-      const l = (c[0] + c[1] + c[2]) / 3;
-      return mix(c, [l, l * 1.02, l * 1.06], amount);
-    };
     const overcast = w.overcast;
-    let zenith = mix(SKY.nightZenith, SKY.dayZenith, d);
-    let horizon = mix(SKY.nightHorizon, SKY.dayHorizon, d);
-    zenith = mix(zenith, SKY.duskZenith, tw * 0.6);
-    horizon = mix(horizon, SKY.duskHorizon, tw * 0.55 * (1 - overcast * 0.6));
-    zenith = grey(zenith, overcast).map((v, i) => v * (1 - overcast * 0.25) * pal.skyTint[i]);
-    horizon = grey(horizon, overcast).map((v, i) => v * (1 - overcast * 0.2) * pal.skyTint[i]);
-    if (weatherId === 'storm') {
-      zenith = zenith.map((v) => v * 0.55);
-      horizon = horizon.map((v) => v * 0.7);
-    }
-
-    const cols = this.skyColors;
-    for (let i = 0; i < this.skyHeights.length; i += 1) {
-      const t = clamp(this.skyHeights[i], 0, 1);
-      const c = mix(horizon, zenith, Math.pow(t, 0.55));
-      cols[i * 4] = clamp(c[0], 0, 1) * 255;
-      cols[i * 4 + 1] = clamp(c[1], 0, 1) * 255;
-      cols[i * 4 + 2] = clamp(c[2], 0, 1) * 255;
-    }
-    this.skyMesh.setColors32(cols);
-    this.skyMesh.update();
-
     const elev = sunAngle(hour);
     const sunDir = new pc.Vec3(Math.cos(elev), Math.sin(elev), 0.45).normalize();
-    this.sunDisc.setPosition(sunDir.clone().mulScalar(820));
-    this.sunDisc.enabled = sunDir.y > -0.05 && overcast < 0.6;
     const moonDir = new pc.Vec3(-Math.cos(elev), -Math.sin(elev), -0.3).normalize();
-    this.moonDisc.setPosition(moonDir.clone().mulScalar(820));
-    this.moonDisc.enabled = moonDir.y > 0 && overcast < 0.6;
+    // Thick enough to feel, thin enough to see your float. Light haze is thinned so far hills keep their shape.
+    const fogBase = Math.min(0.034, w.fog * pal.fog);
+    const fogDensity = fogBase * lerp(0.5, 1, clamp((fogBase - 0.004) / 0.012, 0, 1));
+    const sky = this.sky.set(sunDir, moonDir, {
+      overcast,
+      haze: clamp(0.3 + fogDensity * 25, 0, 1),
+      cover: look.cover,
+      cloudOpacity: look.cloudOpacity,
+      dark: look.dark,
+      tint: pal.skyTint,
+      // Snow on the ground bounces light back up.
+      bakeScale: pal.snow ? 0.8 : 0.65
+    });
+    this.app.scene.fog.color = new pc.Color(...toGamma(sky.hazeColor));
+    this.app.scene.fog.density = fogDensity;
 
-    const night = sunDir.y < 0.02;
+    // Sunlight by day, moonlight by night, each fading out as it nears the horizon.
+    const sunUp = clamp(sunDir.y * 5, 0, 1);
+    const moonUp = clamp(moonDir.y * 4, 0, 1);
+    const sunI = 2.1 * sunUp * (1 - overcast * 0.72) * (1 - look.dark * 0.5);
+    const moonI = 0.32 * moonUp * (1 - overcast * 0.6);
+    const night = sunDir.y < 0.0;
     const lightDir = night ? moonDir : sunDir;
     this.sunLight.setPosition(lightDir.clone().mulScalar(100));
     this.sunLight.lookAt(0, 0, 0);
     this.sunLight.rotateLocal(90, 0, 0);
-    const warm = mix([1, 0.62, 0.38], [1, 0.97, 0.9], clamp(sunDir.y * 2.5, 0, 1));
-    const lc = night ? [0.55, 0.65, 0.9] : warm;
-    this.sunLight.light.color = new pc.Color(lc[0], lc[1], lc[2]);
-    this.sunLight.light.intensity = night ? 0.22 : (0.25 + 1.35 * d) * w.light;
+    const lc = night ? [0.6, 0.72, 1] : mix(sky.sunColor, [1, 1, 1], overcast * 0.6);
+    this.lightColor = lc;
+    this.lightIntensity = night ? moonI : sunI;
+    this.sunLight.light.color = new pc.Color(...toGamma(lc));
+    this.sunLight.light.intensity = this.lightIntensity;
+    this.sunLight.light.castShadows = this.lightIntensity > 0.05;
 
-    const snowBounce = pal.snow ? 0.06 * d : 0;
-    // Never pitch black: a little moonlight so you can still find your float.
-    this.ambient = horizon.map((v, i) => Math.max([0.075, 0.085, 0.12][i], 0.03 + v * 0.42 + [0, 0.005, 0.02][i] + snowBounce));
-    this.app.scene.ambientLight = new pc.Color(this.ambient[0], this.ambient[1], this.ambient[2]);
-    this.app.scene.fog.color = new pc.Color(horizon[0], horizon[1], horizon[2]);
-    // Thick enough to feel, thin enough to see your float.
-    this.app.scene.fog.density = Math.min(0.034, w.fog * pal.fog);
-    // Fake sky reflection: water picks up the horizon colour (less on murky water).
-    const reflect = 0.3 * (pal.reflect ?? 1);
-    this.waterMaterial.emissive = new pc.Color(horizon[0] * reflect, horizon[1] * reflect * 1.1, horizon[2] * reflect * 1.27);
-    const glint = 0.55 * (1 - overcast * 0.75) * Math.max(0.25, d);
-    this.waterMaterial.specular = new pc.Color(glint, glint, glint);
-    this.waterMaterial.gloss = 0.9 - overcast * 0.2;
-    this.waterMaterial.update();
-    const cloud = mix([0.25, 0.27, 0.32], [1, 0.98, 0.96], d);
-    const cloudTint = mix(cloud, [1, 0.72, 0.55], tw * 0.5 * (1 - overcast * 0.8)).map((v) => v * (1 - overcast * (weatherId === 'storm' ? 0.55 : 0.3)));
-    this.cloudMaterial.emissive = new pc.Color(cloudTint[0], cloudTint[1], cloudTint[2]);
-    // Fog hides the sky.
-    this.cloudMaterial.opacity = weatherId === 'fog' ? 0.12 : 0.75 + overcast * 0.2;
-    this.cloudMaterial.update();
+    // A gentle auto exposure, like eyes adjusting: dim scenes are lifted, bright snow is held back.
+    const sceneLight = lum(sky.ambient) + 0.35 * this.lightIntensity * lum(lc);
+    this.app.scene.exposure = clamp(Math.pow(1.4 / Math.max(sceneLight, 0.01), 0.3), 0.85, 2.3) * (pal.snow ? 0.8 : 1);
+
+    this.waterSurface.setLight({
+      sunDir: lightDir,
+      sunColor: lc.map((v) => v * this.lightIntensity),
+      ambient: sky.ambient,
+      gloss: lerp(600, 90, overcast)
+    });
+
+    // Colour grade: warmer at golden hour, cool and flat in storms and at night.
+    const golden = clamp(1 - Math.abs(sunDir.y - 0.12) / 0.2, 0, 1) * (1 - overcast);
+    const nightK = clamp(1 - d * 2, 0, 1);
+    this.grade = {
+      saturation: lerp(1.08, 0.82, Math.max(overcast * 0.6, nightK * 0.7)) - look.dark * 0.12,
+      contrast: 1.04 + golden * 0.04 - overcast * 0.04,
+      brightness: 1 + overcast * 0.08 + nightK * 0.12,
+      tint: mix(mix([1, 1, 1], [1.05, 1, 0.92], golden), [0.92, 0.97, 1.08], Math.max(nightK, look.dark * 0.6))
+    };
+
     this.waveStrength = w.waves;
-    this.horizon = horizon;
+    // Wind follows the weather: a breeze on a sunny day, a gale in a storm.
+    this.windStrength = clamp(0.25 + w.waves * 0.3, 0.2, 1.2);
     this.precip = w.precip || null;
     this.storm = !!w.lightning;
     this.night = d < 0.15;
@@ -908,8 +763,9 @@ export class WorldScene {
 
   update(dt, camPos) {
     this.time += dt;
-    this.updateWater(this.time);
-    this.sky.setPosition(camPos.x, 0, camPos.z);
+    this.sky.update(dt);
+    setWind(this.device, this.time, this.windStrength ?? 0.3);
+    this.waterSurface.update(this.time, { strength: this.waveStrength, drift: this.drift, rain: this.precip === 'rain' ? (this.storm ? 1 : 0.6) : 0 });
     if (this.precip === 'rain') this.drawRain(dt, camPos);
     if (this.precip === 'snow') this.drawSnow(dt, camPos);
     this.updateLightning(dt, camPos);
@@ -949,10 +805,13 @@ export class WorldScene {
     if (this.flash > 0 || this.flashWas) {
       this.flash = Math.max(0, this.flash - dt * 3.5);
       const f = this.flash * (0.6 + 0.4 * Math.sin(this.time * 70));
-      const amb = this.ambient || [0.2, 0.2, 0.2];
-      this.app.scene.ambientLight = new pc.Color(amb[0] + f * 0.7, amb[1] + f * 0.72, amb[2] + f * 0.8);
-      this.skyMaterial.emissive = new pc.Color(1 + f * 2.2, 1 + f * 2.2, 1 + f * 2.5);
-      this.skyMaterial.update();
+      // The sky lights up, and so does everything under it.
+      this.sky.flash = f * 1.6;
+      const lc = this.lightColor || [1, 1, 1];
+      const base = this.lightIntensity || 0;
+      const k = base / (base + f * 2.5 || 1);
+      this.sunLight.light.color = new pc.Color(...toGamma(mix([0.85, 0.9, 1], lc, k)));
+      this.sunLight.light.intensity = base + f * 2.5;
       this.flashWas = this.flash > 0;
     }
   }
