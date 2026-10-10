@@ -14,6 +14,8 @@ import { RESULT_TEXT, createFight, fightReadout, stepFight } from './sim/fight.j
 import { SENTIMENT, changeOf, createMarket, quote, stepMarket } from './sim/market.js';
 import { WEATHER, clockLabel, createWorld, dayOf, daylight, hourOf, setClimate, stepWorld } from './sim/world.js';
 import { ALL_GEAR, BAG_SIZE, bridge, buy, catchXp, gear, levelOf, loadProfile, owns, recordCatch, repairCost, saveProfile, travel } from './sim/profile.js';
+import { loadAccount, rename, saveAccount } from './sim/account.js';
+import { buyWithReel, equipSkin, equippedSkin, itemById } from './sim/store.js';
 import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/events.js';
 import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
 import { derbyCatch, register, settleDerby, stepDerby, upcomingDerbies } from './sim/derby.js';
@@ -40,6 +42,7 @@ class Game {
       }
     })();
     this.profile = loadProfile(this.storage);
+    this.account = loadAccount(this.storage);
     this.world = createWorld(this.rng, 6 * 60 + 30);
     this.market = createMarket(this.rng);
     stepMarket(this.market, 90); // some price history before the first look
@@ -82,6 +85,7 @@ class Game {
     this.applyQuality(this.renderer.level);
     this.rod = new Rod(this.camera);
     this.floatModel = new FloatBobber(this.app);
+    this.applySkins();
     this.lureModel = new Lure(this.app);
     this.effects = new Effects(this.app);
     this.life = new Life(this.app, this.scene, this.effects);
@@ -143,11 +147,21 @@ class Game {
 
   save() {
     saveProfile(this.storage, this.profile);
+    saveAccount(this.storage, this.account);
+  }
+
+  applySkins() {
+    this.rod.setLook(equippedSkin(this.account, 'rod').look);
+    this.floatModel.setLook(equippedSkin(this.account, 'float').look);
   }
 
   title() {
     document.getElementById('start-button').addEventListener('click', () => {
       this.sound.unlock();
+      if (!this.account.betaNoticeSeenAt) {
+        this.account.betaNoticeSeenAt = Date.now();
+        this.save();
+      }
       this.ui.showHud();
       this.state = 'idle';
       if (pc.platform.touch) document.getElementById('touch').classList.remove('hidden');
@@ -209,6 +223,11 @@ class Game {
     window.addEventListener('keydown', (e) => {
       if (this.state === 'title') return;
       const k = e.code;
+      // Typing in a text box (the account name) shouldn't trigger game keys.
+      if (e.target instanceof HTMLInputElement && e.target.type === 'text') {
+        if (k === 'Enter' && e.target.id === 'account-name') this.action('rename', {});
+        if (k !== 'Escape') return;
+      }
       if (k === 'Escape') {
         if (this.photo) this.togglePhoto();
         else if (this.ui.modalOpen) this.ui.close();
@@ -225,7 +244,7 @@ class Game {
         }
         return;
       }
-      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyO: 'missions', KeyH: 'help' };
+      const panels = { KeyT: 'tackle', KeyB: 'market', KeyM: 'map', KeyJ: 'journal', KeyO: 'missions', KeyH: 'help', KeyU: 'store' };
       if (panels[k]) {
         if (this.ui.panel === panels[k]) this.ui.close();
         else this.ui.open(panels[k]);
@@ -389,6 +408,25 @@ class Game {
         if (data.slot === 'line' || data.slot === 'reel') this.resetDrag();
         this.reelIn();
         break;
+      case 'store-tab':
+        this.ui.storeTab = data.tab;
+        break;
+      case 'store-buy': {
+        if (buyWithReel(p, this.account, itemById(data.id))) {
+          this.sound.cash();
+          equipSkin(this.account, itemById(data.id));
+          this.applySkins();
+        }
+        break;
+      }
+      case 'store-equip':
+        if (equipSkin(this.account, itemById(data.id))) this.applySkins();
+        break;
+      case 'rename': {
+        const input = document.getElementById('account-name');
+        if (input && !rename(this.account, input.value)) this.ui.toast('Names need 3 to 20 letters or numbers', 'bad');
+        break;
+      }
       case 'repair': {
         const rod = this.gear.rod;
         p.wallet -= Math.min(p.wallet, repairCost(rod));

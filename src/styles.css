@@ -270,3 +270,16 @@ body.photo #hud { display: none; }
   .map-wrap { grid-template-columns: 1fr; }
   .cast-meter { bottom: 230px; }
 }
+
+/* Beta notice and store */
+.beta-notice { margin: 0 auto 16px; max-width: 460px; padding: 10px 14px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(0, 0, 0, 0.45); text-align: left; font-size: 13px; }
+.beta-notice strong { color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; font-size: 12px; }
+.beta-notice p { margin: 4px 0 0; }
+.account-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.account-row input { flex: 0 1 200px; min-width: 0; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); color: var(--text); font: inherit; }
+.account-row .note { flex-basis: 100%; margin: 0; }
+.swatch { display: inline-flex; vertical-align: -3px; margin-right: 8px; border-radius: 4px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.25); }
+.swatch.float { flex-direction: column; width: 14px; height: 18px; }
+.swatch.float i { flex: 1; }
+.swatch.float i:first-child { flex: 0.4; }
+.swatch.rod { width: 28px; height: 8px; vertical-align: 2px; }

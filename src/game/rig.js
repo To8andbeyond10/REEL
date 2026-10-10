@@ -84,6 +84,13 @@ export class Rod {
     this.root.setLocalPosition(aspect < 1 ? 0.2 : 0.4, -0.52, -0.3);
   }
 
+  // A store finish: { blank, gloss }. Recolours the rod blank in place.
+  setLook(look) {
+    this.blank.diffuse = new pc.Color().fromString(look.blank);
+    this.blank.gloss = look.gloss;
+    this.blank.update();
+  }
+
   tipPosition() {
     return this.tip.getPosition();
   }
@@ -92,11 +99,23 @@ export class Rod {
 export class FloatBobber {
   constructor(app) {
     this.entity = new pc.Entity('float');
-    part(this.entity, 'sphere', solidMaterial('#f2f2ee', { gloss: 0.6 }), [0.07, 0.09, 0.07], [0, -0.02, 0]);
-    part(this.entity, 'sphere', solidMaterial('#e8402e', { gloss: 0.6, emissive: 0.25 }), [0.072, 0.07, 0.072], [0, 0.03, 0]);
-    part(this.entity, 'cylinder', solidMaterial('#ffb21e', { emissive: 0.5 }), [0.012, 0.16, 0.012], [0, 0.12, 0]);
+    this.body = part(this.entity, 'sphere', solidMaterial('#f2f2ee', { gloss: 0.6 }), [0.07, 0.09, 0.07], [0, -0.02, 0]);
+    this.cap = part(this.entity, 'sphere', solidMaterial('#e8402e', { gloss: 0.6, emissive: 0.25 }), [0.072, 0.07, 0.072], [0, 0.03, 0]);
+    this.antenna = part(this.entity, 'cylinder', solidMaterial('#ffb21e', { emissive: 0.5 }), [0.012, 0.16, 0.012], [0, 0.12, 0]);
     app.root.addChild(this.entity);
     this.entity.enabled = false;
+  }
+
+  // A store skin: { body, cap, antenna, glow }.
+  setLook(look) {
+    const paint = (e, mat) => {
+      const old = e.render.material;
+      e.render.material = mat;
+      old?.destroy();
+    };
+    paint(this.body, solidMaterial(look.body, { gloss: 0.6 }));
+    paint(this.cap, solidMaterial(look.cap, { gloss: 0.6, emissive: look.glow }));
+    paint(this.antenna, solidMaterial(look.antenna, { emissive: Math.max(0.5, look.glow) }));
   }
 }
 
