@@ -112,50 +112,6 @@ export class Lure {
 
 // A low-poly fish from primitives, coloured per species, about `model.length` units long.
 // species.model: deep (body height), snout (beak length), barbels, scutes (bony back plates).
-export function buildFish(app, species) {
-  const m = { deep: 0.26, snout: 0, barbels: false, scutes: false, length: 1, ...species.model };
-  const root = new pc.Entity(`fish-${species.id}`);
-  const body = solidMaterial(species.color, { gloss: 0.7, specular: 0.4 });
-  const belly = solidMaterial(species.belly, { gloss: 0.6, specular: 0.3 });
-  const fin = solidMaterial(species.color, { gloss: 0.4 });
-  const dark = solidMaterial('#111111', { gloss: 0.9, specular: 0.8 });
-  const L = m.length;
-  const deep = m.deep;
-  const bodyLen = 0.86 * L - m.snout * 0.6;
-  const head = bodyLen / 2;
-  part(root, 'sphere', body, [0.24, deep, bodyLen], [0, 0.02, 0]);
-  part(root, 'sphere', belly, [0.2, deep * 0.7, bodyLen * 0.84], [0, -0.05, 0.02]);
-  // The tail hangs from a joint inside the rear of the body, so it can wag (see swimFish).
-  const tail = new pc.Entity('tail');
-  tail.setLocalPosition(0, 0, -head * 0.6);
-  root.addChild(tail);
-  part(tail, 'cone', fin, [0.04, 0.26, 0.3], [0, 0, -head * 0.4 - 0.08], [-90, 0, 0]);
-  root.tail = tail;
-  part(root, 'box', fin, [0.02, deep * 0.5, bodyLen * 0.42], [0, deep * 0.5, -0.02]);
-  for (const s of [-1, 1]) {
-    part(root, 'sphere', dark, [0.04, 0.04, 0.04], [s * 0.1, 0.05, head * 0.77]);
-    part(root, 'box', fin, [0.12, 0.01, 0.08], [s * 0.12, -0.06, head * 0.42], [0, 0, s * 25]);
-  }
-  if (m.snout) part(root, 'cone', body, [0.08, m.snout, 0.06], [0, 0, head + m.snout * 0.45], [90, 0, 0]);
-  if (m.barbels) {
-    for (const s of [-1, 1]) part(root, 'cylinder', dark, [0.008, 0.18, 0.008], [s * 0.06, -0.04, head + m.snout * 0.3], [70, s * 30, 0]);
-  }
-  if (m.scutes) {
-    for (let i = 0; i < 7; i += 1) part(root, 'cone', belly, [0.05, 0.06, 0.05], [0, deep * 0.95, head * 0.8 - (i * bodyLen) / 8]);
-  }
-  app.root.addChild(root);
-  root.enabled = false;
-  return root;
-}
-
-// Wags the tail: slow and wide when the fish is held, quicker and livelier while it fights.
-export function swimFish(model, time, pace = 1) {
-  const tail = model.tail;
-  if (!tail) return;
-  const ph = time * (2.2 + 3 * pace) * Math.PI * 2;
-  tail.setLocalEulerAngles(0, Math.sin(ph) * (12 + 8 * pace), 0);
-}
-
 export class Effects {
   constructor(app) {
     this.app = app;
