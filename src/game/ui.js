@@ -1,5 +1,5 @@
 // HUD and menus (plain DOM over the 3D canvas).
-import { LURES, RODS, SPECIES, byId, speciesById } from '../sim/data.js';
+import { LINES, LURES, REELS, RODS, SPECIES, byId, speciesById } from '../sim/data.js';
 import { ALL_GEAR, BAG_SIZE, canBridge, canBuy, canTravel, levelOf, repairCost, xpForLevel } from '../sim/profile.js';
 import { SENTIMENT, changeOf, quote } from '../sim/market.js';
 import { WATERS, speciesIn } from '../sim/waters.js';
@@ -602,7 +602,7 @@ export class Ui {
           <div class="section"><h3>Tutorial</h3><p class="note">A coached walk through your first catch. It runs the first time you play and you can replay it any time.</p><button class="primary" data-action="tutorial">Replay tutorial</button></div>`
       },
       fishing: {
-        label: 'Fishing',
+        label: 'Catching a fish',
         html: `<div class="grid">
             ${card('Cast', 'Hold left click or Space to build power and release to cast. The meter swings back and forth, so let go near the top. Aim with the mouse.')}
             ${card('Float rigs', 'A worm or minnow hangs under a float. Set the depth with Q and E (or in Tackle) to where fish feed, then wait. A nibble makes the float bob; a bite pulls it under.')}
@@ -617,14 +617,23 @@ export class Ui {
       },
       gear: {
         label: 'Gear',
-        html: `<div class="grid">
-            ${card('Rods', 'Max load is how hard you can pull before the rod breaks; longer rods cast further. A broken rod must be repaired in Tackle before you can fish with it.')}
-            ${card('Reels', 'Max drag, retrieve speed and line capacity. Big fish need big reels.')}
-            ${card('Lines', 'Strength is the pull that snaps it. Fluoro is nearly invisible so wary fish bite more. Braid is strong but has no stretch, so head shakes hit hard.')}
-            ${card('Baits and lures', 'You start with a worm float rig and a spinner. Jigs, poppers, bottom rigs, crankbaits and live minnows unlock as you level.')}
-            ${card('Fish finder', 'Buy it in Tackle. Sonar on your HUD shows the bottom, your lure and fish along your cast line. K turns it on and off.')}
-            ${card('Levels', 'Every fish kept or released earns XP. New levels unlock gear, spots and waters.')}
-          </div>`
+        html: `<p class="note" style="margin-top:0">Your setup is a rod, a reel, a line and a rig or lure on the end. Each one changes what bites and whether you land it. Buy and swap gear in Tackle (T); better gear unlocks as you level up.</p>
+          <div class="grid">
+            ${card('Rod', 'Cast distance, and max load: how hard the rod can pull before it snaps. Lifting the rod (right click) loads it more. A soft rod bends and cushions head shakes; a fast, stiff rod passes them straight to the line.')}
+            ${card('Reel', 'Max drag is the hardest it can hold back a running fish. Retrieve is how fast it winds in. Power decides whether it can wind against a heavy fish or stalls. The spool holds your line: if a fish takes it all, you are spooled.')}
+            ${card('Line', 'Breaks at its strength in kg, so set the drag below that. Stretch cushions shakes and lunges. Visibility matters: wary fish bite less on line they can see.')}
+            ${card('Rig or lure', 'Decides how you fish and which fish bite. Each species has favourites (below, and in the Journal).')}
+            ${card('Drag', 'The setting that ties it together. Mouse wheel or [ ]. It starts at half your line strength. Lower it for big fish so the reel gives line instead of snapping; raise it so you can gain line on a tired fish.')}
+            ${card('Broken rod', 'Over-load the rod and it breaks. Repair it in Tackle (a quarter of its price, at least 20 REEL) before your next cast.')}
+            ${card('Fish finder', 'Electronics in Tackle. Sonar on your HUD shows the bottom, your lure and fish along your cast line. K turns it on and off.')}
+          </div>
+          <div class="section"><h3>Rigs and lures</h3><table class="keys">${LURES.map((l) => {
+            const how = l.kind === 'float' ? 'Hangs bait under a float at the depth you set. Wait for the dip, then strike.' : l.kind === 'bottom' ? 'Sits on the bottom. Watch the rod tip.' : l.topwater ? `Works on the surface. Pop it and pause; best around ${l.idealSpeed} m/s.` : `Must be retrieved. Runs about ${l.dive} m deep; best at ${l.idealSpeed} m/s${l.pauseAppeal >= 0.6 ? ', and fish hit it on the pause' : ''}.`;
+            const best = SPECIES.filter((sp) => (sp.lures[l.id] || 0) >= 0.8).map((sp) => sp.name).join(', ') || 'A bit of everything';
+            return `<tr><td><b>${l.name}</b><br>Level ${l.level}</td><td>${how}</td><td>Best for: ${best}</td></tr>`;
+          }).join('')}</table></div>
+          <div class="section"><h3>Lines</h3><table class="keys">${LINES.map((l) => `<tr><td><b>${l.name}</b><br>Level ${l.level}</td><td>Breaks at ${l.strength} kg · ${Math.round(l.stretch * 100)}% stretch · ${l.visibility > 0.5 ? 'easy' : l.visibility > 0.2 ? 'fairly easy' : 'hard'} for fish to see</td><td>${l.blurb}</td></tr>`).join('')}</table></div>
+          <div class="section"><h3>Rods and reels</h3><table class="keys">${RODS.map((r) => `<tr><td><b>${r.name}</b><br>Level ${r.level}</td><td>Max load ${r.maxLoad} kg · casts ${r.cast} m</td><td>${r.blurb}</td></tr>`).join('')}${REELS.map((r) => `<tr><td><b>${r.name}</b><br>Level ${r.level}</td><td>Max drag ${r.maxDrag} kg · ${r.speed} m/s · ${r.capacity} m spool</td><td>${r.blurb}</td></tr>`).join('')}</table></div>`
       },
       waters: {
         label: 'Waters and events',

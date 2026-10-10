@@ -6,7 +6,7 @@ export const STEPS = [
   {
     id: 'welcome',
     title: 'Welcome to Genesis Lake',
-    text: "This quick tutorial walks you through your first fish. You can skip it now and replay it any time from How to play (H).",
+    text: "This quick tutorial walks you through catching your first fish, then how your rod, reel, line and lures change the game. You can skip it now and replay it any time from How to play (H).",
     next: true
   },
   {
@@ -51,22 +51,41 @@ export const STEPS = [
     until: 'catch-done'
   },
   {
-    id: 'market',
-    title: 'Sell at the Fish Market',
-    text: 'Every species trades like a coin and its price moves all day. Open the Fish Market (B) to sell your bag when the price is up. You earn REEL.',
-    until: 'panel:market',
+    id: 'tackle',
+    title: 'Your tackle matters',
+    text: 'Every part of your setup changes what you can catch and how the fight goes. Open Tackle (T) to see yours, then close it to carry on.',
+    until: 'panel:tackle',
     next: true
   },
   {
-    id: 'gear',
-    title: 'Gear up',
-    text: 'Spend REEL on rods, reels, lines and lures in Tackle (T). New gear unlocks as you level up. The Store (U) has float and rod looks; they only change how things look.',
+    id: 'rod-reel',
+    title: 'Rod and reel',
+    text: 'Rod: longer rods cast further, max load is how hard it can pull before it snaps, and a softer rod cushions head shakes. Reel: max drag is how hard it can hold a running fish, retrieve is how fast it winds in, and the spool is how much line it holds. A big fish can strip a small spool.',
+    next: true
+  },
+  {
+    id: 'line',
+    title: 'Line',
+    text: "Line strength is the pull that snaps it, so set the drag below it. Mono stretches and forgives shakes. Fluoro is nearly invisible, so wary fish bite more. Braid is very strong but doesn't stretch, so shakes hit hard.",
+    next: true
+  },
+  {
+    id: 'rigs',
+    title: 'Rigs and lures',
+    text: 'Float rigs hang bait at a set depth: wait for the dip. Lures only work when moving: spinners on a steady retrieve, jigs hopped and dropped, poppers on the surface, crankbaits fast and deep. Bottom rigs sit still for catfish. Each fish has favourites, and How to play (H) lists them.',
+    next: true
+  },
+  {
+    id: 'market',
+    title: 'Sell at the Fish Market',
+    text: 'Every species trades like a coin and its price moves all day. Open the Fish Market (B) to sell your bag when the price is up. You earn REEL to spend on better tackle.',
+    until: 'panel:market',
     next: true
   },
   {
     id: 'explore',
     title: "You're ready",
-    text: 'The Map (M) moves you to new spots and waters. Missions (O) has contracts and derbies. How to play (H) explains everything. Tight lines!',
+    text: 'The Map (M) moves you to new spots and waters. Missions (O) has contracts and derbies. The Store (U) has float and rod looks. How to play (H) explains everything. Tight lines!',
     next: true,
     last: true
   }

@@ -7,7 +7,7 @@ const at = (t) => currentStep(t)?.id;
 test('a clean first catch walks every step to the end', () => {
   const t = createTutorial();
   assert.equal(at(t), 'welcome');
-  for (const e of ['next', 'look', 'cast', 'bite', 'hooked', 'fight-end', 'catch-done', 'panel:market', 'next']) {
+  for (const e of ['next', 'look', 'cast', 'bite', 'hooked', 'fight-end', 'catch-done', 'panel:tackle', 'next', 'next', 'next', 'panel:market']) {
     assert.ok(tutorialEvent(t, e), e);
   }
   assert.equal(at(t), 'explore');
