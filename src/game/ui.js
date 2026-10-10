@@ -9,6 +9,10 @@ import { missionLabel } from '../sim/missions.js';
 import { FORMATS, derbyActive, formatScore, prizePool, standings, upcomingDerbies } from '../sim/derby.js';
 import { EFFECT_TEXT, SKIN_SLOTS, canBuyItem, equippedSkin, itemsFor, ownsSkin } from '../sim/store.js';
 import { FLAGS } from '../sim/flags.js';
+import { BADGES } from '../sim/account.js';
+import { BAITS, CATCH_LOOK, canTopUp, castCost, frenzyCost, modeFor, stakeOf } from '../sim/cashwaters.js';
+import { summary, track } from '../sim/telemetry.js';
+import { hudClasses, loadHudView, saveHudView, toggleClean, toggleFold } from './hudview.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -38,11 +42,21 @@ export class Ui {
     this.panel = null;
     this.tab = 'rod';
     this.storeTab = 'float';
+    this.cashResult = null;
     this.helpTab = 'start';
     this.toastTimer = 0;
     this.lastNews = null;
     this.tickerAt = -1;
 
+    this.view = loadHudView(game.storage);
+    this.applyView();
+    document.querySelectorAll('[data-fold]').forEach((b) => b.addEventListener('click', () => this.setView(toggleFold(this.view, b.dataset.fold))));
+    $('clean-button').addEventListener('click', () => this.toggleCleanView());
+    $('menu-toggle').addEventListener('click', () => this.el.hud.classList.toggle('menu-open'));
+    // Picking something from the folded menu closes it again.
+    document.querySelector('.menu-bar').addEventListener('click', (e) => {
+      if (e.target.closest('button') && !e.target.closest('#menu-toggle')) this.el.hud.classList.remove('menu-open');
+    });
     document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => this.open(b.dataset.panel)));
     $('modal-close').addEventListener('click', () => this.close());
     this.el['modal-body'].addEventListener('click', (e) => {
@@ -62,6 +76,25 @@ export class Ui {
       const t = e.target.closest('[data-action]');
       if (t) this.game.action(t.dataset.action, t.dataset);
     });
+  }
+
+  applyView() {
+    const hud = this.el.hud;
+    for (const c of [...hud.classList]) if (c === 'clean' || c.startsWith('fold-')) hud.classList.remove(c);
+    hud.classList.add(...hudClasses(this.view));
+    $('clean-button').classList.toggle('on', this.view.clean);
+  }
+
+  setView(view) {
+    this.view = view;
+    saveHudView(this.game.storage, view);
+    this.applyView();
+  }
+
+  toggleCleanView() {
+    this.setView(toggleClean(this.view));
+    this.el.hud.classList.remove('menu-open');
+    this.toast(this.view.clean ? 'Clean view on. Press V to bring everything back.' : 'Clean view off');
   }
 
   get modalOpen() {
@@ -288,6 +321,7 @@ export class Ui {
     const st = this.game.state;
     if (name !== 'photo' && (st === 'fight' || st === 'bite' || st === 'catch')) return;
     this.panel = name;
+    if (name !== 'photo') track(this.game.stats, 'panel', { name });
     this.el.modal.classList.remove('hidden');
     this.el.coach.classList.add('behind');
     this.render();
@@ -305,7 +339,7 @@ export class Ui {
 
   render() {
     if (!this.panel) return;
-    const titles = { store: 'Store', tackle: 'Tackle shop', market: 'Fish market', map: this.game.water.name, journal: 'Fish journal', missions: 'Missions and derbies', help: 'How to play', photo: 'Photo' };
+    const titles = { cash: 'Cash Waters', beta: 'Your beta data', store: 'Store', tackle: 'Tackle shop', market: 'Fish market', map: this.game.water.name, journal: 'Fish journal', missions: 'Missions and derbies', help: 'How to play', photo: 'Photo' };
     this.el['modal-title'].textContent = titles[this.panel];
     const body = this.el['modal-body'];
     if (this.panel === 'photo') return;
@@ -372,17 +406,74 @@ export class Ui {
         ? '<button disabled>Equipped</button>'
         : owned
           ? `<button data-action="store-equip" data-id="${i.id}">Equip</button>`
-          : `<button class="primary" data-action="store-buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : `Need ${check.why}`}</button>`;
+          : `<button class="primary" data-action="store-buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : `Need ${check.why}`}</button>${FLAGS.realMoneyPayments && i.usd > 0 ? `<button data-action="store-card" data-id="${i.id}">Pay $${i.usd.toFixed(2)} by card</button>` : ''}`;
       const price = owned ? (i.price ? 'Owned' : 'Free') : `${fmt(i.price)} REEL${FLAGS.realMoneyPayments ? ` or $${i.usd.toFixed(2)}` : ''}`;
       return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${swatch(i)}${i.name}</h3><div class="stats"><span>Effect <b>${EFFECT_TEXT}</b></span></div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${price}</span>${btn}</div></div>`;
     };
     const tabs = Object.entries(SKIN_SLOTS)
       .map(([k, s]) => `<button data-action="store-tab" data-tab="${k}" class="${this.storeTab === k ? 'on' : ''}">${s.label}</button>`)
       .join('');
-    return `<div class="account-row"><span class="label">Angler name</span><input id="account-name" type="text" maxlength="20" value="${esc(account.name)}" autocomplete="off"><button data-action="rename">Save</button><span class="note">Your items are saved to this account in this browser and can't be traded or sold.</span></div>
+    const badges = (account.badges || []).map((b) => BADGES[b] && `<span class="badge" title="${BADGES[b].blurb}">${BADGES[b].name}</span>`).filter(Boolean).join('');
+    return `<div class="account-row"><span class="label">Angler name</span><input id="account-name" type="text" maxlength="20" value="${esc(account.name)}" autocomplete="off"><button data-action="rename">Save</button>${badges}<button class="ghost" data-action="open-beta">Your beta data</button><span class="note">Your items are saved to this account in this browser and can't be traded or sold.</span></div>
       <div class="tabs">${tabs}</div>
       <div class="grid">${itemsFor(this.storeTab).map(card).join('')}</div>
-      <p class="note">Beta: store items cost REEL points from fishing. Real-money purchases are off during the beta. Every item shows exactly what you get, and nothing is random.</p>`;
+      <p class="note">${FLAGS.realMoneyPayments ? 'Pay with REEL points from fishing, or by card through Stripe. Card details go to Stripe, never to the game.' : 'Store items cost REEL points from fishing.'} Every item shows exactly what you get, and nothing is random.</p>`;
+  }
+
+  // Cash Waters: the paytable game, on play money for the beta. Odds and RTP are shown, never hidden.
+  cash() {
+    const { cash, cashPending, profile } = this.game;
+    const mode = modeFor(profile.water);
+    const busy = !!cashPending;
+    const money = (n) => fmt(n, 2);
+    const stake = stakeOf(cash);
+    const cost = castCost(cash, mode);
+    const fcost = frenzyCost(cash, mode);
+    const baits = BAITS.map((b, i) => `<button data-action="cash-bait" data-i="${i}" class="${cash.bait === i ? 'on' : ''}" ${busy ? 'disabled' : ''}>${b.name} ${money(b.stake)}</button>`).join('');
+    const toggle = (key, label) => `<button data-action="cash-toggle" data-key="${key}" class="${cash[key] ? 'on' : ''}" ${busy ? 'disabled' : ''}>${label}: ${cash[key] ? 'On' : 'Off'}</button>`;
+    let reveal = '<div class="cash-reveal idle">Pick a bait and cast.</div>';
+    if (busy) {
+      reveal = `<div class="cash-reveal"><div>Casting…</div><div class="cash-bar"><i style="animation-duration:${cashPending.ms}ms"></i></div></div>`;
+    } else if (this.cashResult) {
+      const r = this.cashResult;
+      let what = 'Nothing bit.';
+      if (r.outcome === 'catch') what = `${CATCH_LOOK[r.catch.species]?.name ?? r.catch.species} (${fmt(r.catch.x, 2)}×)`;
+      else if (r.outcome === 'frenzy') what = `Feeding frenzy: ${r.frenzy.length} fish`;
+      else if (r.outcome === 'chest') what = `Sunken chest (${fmt(r.chestX, 2)}×)`;
+      const jp = r.jackpots.length ? ` Jackpot: ${r.jackpots.map((j) => `${j.id} ${money(j.amount)}`).join(', ')}.` : '';
+      reveal = `<div class="cash-reveal ${r.won > 0 ? 'win' : ''}"><div class="what">${what}</div><div>Paid ${money(r.cost)} · Won <b>${money(r.won)}</b>${jp}</div></div>`;
+    }
+    const canCast = !busy && cash.balance >= cost;
+    const canFrenzy = !busy && cash.balance >= fcost;
+    const top = canTopUp(cash) ? '<button class="primary" data-action="cash-topup">Top up to 100 (free)</button>' : '';
+    const history = cash.history
+      .slice(0, 8)
+      .map((h) => `<span class="${h.won > 0 ? 'up' : ''}">${h.outcome === 'catch' ? CATCH_LOOK[h.catch]?.name ?? h.catch : h.outcome} ${h.won > 0 ? `+${money(h.won)}` : `-${money(h.cost)}`}</span>`)
+      .join('');
+    const rows = mode.catches
+      .map((c) => `<tr><td>${CATCH_LOOK[c.id]?.name ?? c.name}</td><td>${fmt(c.mult, c.mult < 1 ? 1 : 0)}×</td><td>${c.prob >= 0.001 ? `${fmt(c.prob * 100, 2)}%` : `1 in ${fmt(Math.round(1 / c.prob))}`}</td></tr>`)
+      .join('');
+    const t = cash.totals;
+    return `<div class="cash-head"><div><span class="label">${this.game.water.name} plays the</span><h3>${mode.name} paytable</h3><span class="note">Return to player ${fmt(mode.rtp * 100, 1)}% · hit rate ${fmt(mode.stats.hitRate * 100, 0)}% · max win ${fmt(mode.maxWinX)}×</span></div>
+        <div class="cash-balance"><span class="label">Play balance</span><strong>${money(busy ? cash.balance - cashPending.result.won : cash.balance)}</strong><span class="note">Play money. No cash value.</span></div></div>
+      <div class="label">Bait (stake)</div><div class="tabs">${baits}</div>
+      <div class="tabs">${toggle('quick', 'Quick Cast')}${toggle('chum', `Chum ×${fmt(mode.stats.chumCostX, 2)} cost, same RTP`)}</div>
+      ${reveal}
+      <div class="rest cash-actions"><button class="primary" data-action="cash-cast" ${canCast ? '' : 'disabled'}>Cast for ${money(cost)}</button>
+        <button data-action="cash-frenzy" ${canFrenzy ? '' : 'disabled'}>Frenzy Buy ${money(fcost)} · RTP ${fmt(mode.stats.frenzyBuyRtp * 100, 1)}%</button>${top}</div>
+      <div class="cash-history">${history || '<span class="note">No casts yet.</span>'}</div>
+      <p class="note">Session: ${t.casts} casts, staked ${money(t.staked)}, won ${money(t.won)}. Each cast rolls from the published paytable below. Gear, skill and store items never change these odds. Paytable ${mode.hash.slice(0, 12)}.</p>
+      <details><summary>Odds for one ${money(stake)} cast</summary><table class="odds"><tr><th>Catch</th><th>Pays</th><th>Chance</th></tr>${rows}
+        <tr><td>Feeding frenzy</td><td>bonus</td><td>${fmt(mode.pFrenzy * 100, 2)}%</td></tr><tr><td>Sunken chest</td><td>bonus</td><td>${fmt(mode.pChest * 100, 2)}%</td></tr><tr><td>Nothing</td><td>0×</td><td>${fmt(mode.pNothing * 100, 1)}%</td></tr></table></details>`;
+  }
+
+  beta() {
+    const s = summary(this.game.stats);
+    const json = encodeURIComponent(JSON.stringify(this.game.stats, null, 2));
+    const row = (k, v) => `<span>${k} <b>${v}</b></span>`;
+    return `<p class="note">The beta keeps these numbers in this browser so we can see whether the game holds up. Nothing is sent anywhere.</p>
+      <div class="stats beta-stats">${row('Sessions', s.sessions)}${row('Days played', s.daysPlayed)}${row('Play time', duration(s.playMinutes))}${row('Sim casts', s.simCasts)}${row('Cash Waters casts', s.cashCasts)}${row('Quick Cast share', `${Math.round(s.quickShare * 100)}%`)}${row('Frenzy Buys', s.frenzyBuys)}${row('Store purchases', s.purchases)}</div>
+      <div class="rest" style="margin-top:12px"><a class="button" href="data:application/json,${json}" download="memefishing-beta-data.json">Download</a><button data-action="stats-clear">Delete</button></div>`;
   }
 
   market() {
@@ -656,6 +747,7 @@ export class Ui {
             ${card('Market mood', 'The market flips between bull runs, crabbing and bear markets. Fish bite more in a bull run.')}
             ${card('Spending', 'Tackle and gear, unlocking spots, gas to bridge to other waters, rod repairs, derby entry fees and Store looks.')}
             ${card('Missions', 'Contracts on each water: catch a species, beat a weight, fish a lure, fish at night, release fish or sell well. Each water also has a legendary contract. Rewards are REEL and XP (O).')}
+            ${card('Cash Waters', 'Press C. Each water plays a published paytable on a play balance: pick a bait, then cast (Quick Cast shows the result in 2.5 seconds). The odds and return are shown in the panel, and gear never changes them. The play balance has no cash value and tops up free when it runs out.')}
             ${card('Derbies', 'Four-hour competitions against seven rival anglers: heaviest fish, best 3-fish bag or most fish. Pay the entry, and the top three split the pool.')}
           </div>`
       },
@@ -665,7 +757,7 @@ export class Ui {
             ${card('What it sells', 'New looks for your float and rod. Open it with U.')}
             ${card('Looks only', "Store items never change bites, fights, prices or odds. Each card says what you get, and nothing is random.")}
             ${card('Your account', 'Items are saved to your angler account and stay even if beta progress is reset. They can’t be traded or sold. Set your angler name in the Store.')}
-            ${card('Paying', 'During the beta, store items cost REEL from fishing. Real-money purchases are off.')}
+            ${card('Paying', FLAGS.realMoneyPayments ? 'Pay with REEL from fishing, or by card. Card details go to Stripe’s checkout page, never to the game.' : 'Store items cost REEL from fishing.')}
           </div>`
       },
       controls: {
@@ -680,6 +772,8 @@ export class Ui {
           ['Reel speed', 'W / S', 'Speed − / +'],
           ['Float depth', 'Q / E', 'Tackle menu'],
           ['Tackle, Store, Market', 'T / U / B', 'Menu bar'],
+          ['Cash Waters', 'C', 'Menu bar'],
+          ['Clean view (hide everything not needed to fish)', 'V', 'Menu bar'],
           ['Map, Missions, Journal', 'M / O / J', 'Menu bar'],
           ['How to play', 'H', 'Menu bar'],
           ['Time ×20', 'Z', 'Menu bar'],

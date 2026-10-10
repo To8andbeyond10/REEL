@@ -12,6 +12,7 @@
     <div id="hud" class="hud hidden">
       <div class="left-stack">
         <div class="panel top-left">
+          <button class="fold" data-fold="info" title="Fold (V folds everything)">–</button>
           <div class="clock"><strong id="clock">06:00</strong><span id="day">Day 1</span></div>
           <div class="row"><span id="weather">Sunny</span><span id="temp">18°C</span></div>
           <div class="row muted"><span id="forecast"></span></div>
@@ -25,6 +26,7 @@
       <div class="ticker"><div class="ticker-track" id="ticker"></div></div>
 
       <div class="panel top-right">
+        <button class="fold" data-fold="wallet" title="Fold (V folds everything)">–</button>
         <div class="wallet"><span class="label">Wallet</span><strong id="wallet">0</strong><span class="unit">REEL</span></div>
         <div class="row"><span id="level">Lv 1</span><span id="bag">Bag 0/6</span></div>
         <div class="xp"><div id="xp-fill"></div></div>
@@ -52,6 +54,7 @@
       <div class="right-stack">
         <canvas id="sonar" class="sonar hidden" width="250" height="120"></canvas>
         <div class="panel gear">
+          <button class="fold" data-fold="gear" title="Fold (V folds everything)">–</button>
           <div class="gear-line"><span class="label">Rod</span><span id="g-rod"></span></div>
           <div class="gear-line"><span class="label">Reel</span><span id="g-reel"></span></div>
           <div class="gear-line"><span class="label">Line</span><span id="g-line"></span></div>
@@ -66,7 +69,10 @@
       </div>
 
       <nav class="menu-bar">
+        <button id="menu-toggle" class="menu-toggle">Menu</button>
+        <button id="clean-button">Clean view <kbd>V</kbd></button>
         <button data-panel="tackle">Tackle <kbd>T</kbd></button>
+        <button data-panel="cash">Cash Waters <kbd>C</kbd></button>
         <button data-panel="store">Store <kbd>U</kbd></button>
         <button data-panel="market">Market <kbd>B</kbd></button>
         <button data-panel="map">Map <kbd>M</kbd></button>
@@ -106,7 +112,7 @@
         <p class="lede">Four waters, live whale alerts, derbies and a fish market that never sleeps. Read the water, rig the right gear, play the drag.</p>
         <div class="beta-notice">
           <strong>Phase 1 beta</strong>
-          <p>Everything here uses play money. REEL points have no cash value and can't be bought, withdrawn or traded. Progress may be reset before launch, but store items stay on your account.</p>
+          <p>Everything here uses play money. REEL points have no cash value and can't be bought, withdrawn or traded. Progress may be reset before launch, but store items stay on your account. Everyone who plays the beta gets the Founding Angler badge.</p>
         </div>
         <div class="title-actions">
           <button id="start-button" class="primary">Start fishing</button>
@@ -121,7 +127,8 @@
           <span>Reel speed</span><span>W / S</span>
           <span>Float depth</span><span>Q / E</span>
           <span>Missions, map, photo</span><span>O / M / P</span>
-          <span>Store</span><span>U</span>
+          <span>Cash Waters, store</span><span>C / U</span>
+          <span>Clean view</span><span>V</span>
         </div>
       </div>
     </section>

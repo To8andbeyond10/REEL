@@ -191,7 +191,7 @@ button.ghost { background: transparent; }
 .item h3 { margin: 0; font-size: 15px; }
 .item .stats { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 12px; }
 .item .stats b { color: var(--text); font-weight: 600; }
-.item .foot { display: flex; justify-content: space-between; align-items: center; }
+.item .foot { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; align-items: center; }
 .price { color: var(--accent); font-weight: 700; }
 .note { color: var(--muted); font-size: 12px; margin: 6px 0 12px; }
 .slider { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
@@ -283,6 +283,46 @@ body.photo #hud { display: none; }
 .swatch.float i { flex: 1; }
 .swatch.float i:first-child { flex: 0.4; }
 .swatch.rod { width: 28px; height: 8px; vertical-align: 2px; }
+.badge { display: inline-block; padding: 3px 8px; border-radius: 999px; background: var(--accent); color: #1a1406; font-size: 12px; font-weight: 700; }
+.cash-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.cash-head h3 { margin: 2px 0; }
+.cash-balance { text-align: right; }
+.cash-balance strong { display: block; font-size: 26px; }
+.cash-reveal { margin: 10px 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, 0.3); text-align: center; min-height: 52px; }
+.cash-reveal.idle { color: var(--muted, #aab); }
+.cash-reveal.win { border-color: var(--accent); }
+.cash-reveal .what { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.cash-bar { height: 6px; margin-top: 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.cash-bar i { display: block; height: 100%; width: 0; background: var(--accent); animation: cash-fill linear forwards; }
+@keyframes cash-fill { to { width: 100%; } }
+.cash-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cash-history { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; font-size: 12px; }
+.cash-history span { padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
+.cash-history span.up { color: var(--accent); }
+table.odds { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+table.odds td, table.odds th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+.beta-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+@media (max-width: 600px) { .cash-balance { text-align: left; } }
+/* Folding HUD panels (src/game/hudview.js). */
+.panel .fold { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; border-radius: 5px; font-size: 13px; line-height: 1; background: transparent; color: var(--muted); opacity: 0.6; }
+.panel .fold:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+.left-stack .top-left, .right-stack .gear { position: relative; }
+.hud.fold-info .top-left .row { display: none; }
+.hud.fold-wallet .top-right > :not(.wallet):not(.fold) { display: none; }
+.hud.fold-gear .gear .gear-line { display: none; }
+.hud.fold-info .top-left, .hud.fold-wallet .top-right { min-width: 0; padding-right: 30px; }
+.hud.fold-gear .gear { width: auto; padding-right: 30px; }
+.hud.fold-info .fold[data-fold='info'], .hud.fold-wallet .fold[data-fold='wallet'], .hud.fold-gear .fold[data-fold='gear'] { opacity: 0.9; }
+.hud.clean .ticker, .hud.clean .events, .hud.clean .derby, .hud.clean .news div:not(.notice) { display: none; }
+.menu-toggle { display: none; }
+.hud.clean .menu-toggle { display: inline-block; }
+.hud.clean:not(.menu-open) .menu-bar > button:not(.menu-toggle) { display: none; }
+#clean-button.on { background: var(--accent); color: #1a1406; }
+@media (max-width: 760px) {
+  .hud.clean .left-stack, .hud.clean .top-right { top: 8px; }
+  .gear .fold { display: none; }
+}
+.hud.fold-gear .gear .settings { margin-top: 0; border-top: 0; padding-top: 0; }
 
 /* Tutorial coach and How to play */
 .title-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }

@@ -21,7 +21,8 @@ export function newAccount(rng = Math.random, now = Date.now()) {
     betaNoticeSeenAt: null,
     // { item, paidWith: 'reel' | 'usd', price, at }
     entitlements: [],
-    equipped: {}
+    equipped: {},
+    badges: []
   };
 }
 
@@ -32,7 +33,7 @@ export function loadAccount(storage, rng, now) {
     const data = JSON.parse(raw);
     if (data.version !== 1 || typeof data.id !== 'string') return newAccount(rng, now);
     const fresh = newAccount(rng, now);
-    return { ...fresh, ...data, entitlements: Array.isArray(data.entitlements) ? data.entitlements : [], equipped: data.equipped || {} };
+    return { ...fresh, ...data, entitlements: Array.isArray(data.entitlements) ? data.entitlements : [], equipped: data.equipped || {}, badges: Array.isArray(data.badges) ? data.badges : [] };
   } catch {
     return newAccount(rng, now);
   }
@@ -66,4 +67,17 @@ export function grant(account, item, paidWith, now = Date.now()) {
   if (ownsItem(account, item.id)) return false;
   account.entitlements.push({ item: item.id, paidWith, price: paidWith === 'usd' ? item.usd : item.price, at: now });
   return true;
+}
+
+// Badges are free and earned, never sold. Founding Angler goes to everyone who joins during the beta.
+export const BADGES = {
+  'founding-angler': { name: 'Founding Angler', blurb: 'Joined during the Phase 1 beta.' }
+};
+
+export const hasBadge = (account, id) => (account.badges || []).includes(id);
+
+// Called when the player accepts the beta notice on the title screen.
+export function acceptBetaNotice(account, now = Date.now()) {
+  if (!account.betaNoticeSeenAt) account.betaNoticeSeenAt = now;
+  if (!hasBadge(account, 'founding-angler')) account.badges = [...(account.badges || []), 'founding-angler'];
 }
