@@ -22,6 +22,7 @@ import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/event
 import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
 import { derbyCatch, register, settleDerby, stepDerby, upcomingDerbies } from './sim/derby.js';
 import { sonar } from './sim/sonar.js';
+import { STEPS, createTutorial, currentStep, tutorialEvent } from './sim/tutorial.js';
 import { clamp, createRng } from './sim/random.js';
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -72,6 +73,7 @@ class Game {
     this.photo = false;
     this.snap = null;
     this.finderOn = true;
+    this.tutorial = null;
 
     this.app = new pc.Application(canvas, {
       mouse: new pc.Mouse(canvas),
@@ -208,15 +210,48 @@ class Game {
   title() {
     this.handleCheckoutReturn();
     document.getElementById('start-button').addEventListener('click', () => {
-      this.sound.unlock();
-      acceptBetaNotice(this.account);
-      startSession(this.stats);
-      this.save();
-      this.ui.showHud();
-      this.state = 'idle';
-      if (pc.platform.touch) document.getElementById('touch').classList.remove('hidden');
-      if (this.profile.stats.caught === 0) this.ui.open('help');
+      this.startGame();
+      // New anglers get the tutorial once; anyone can replay it from How to play.
+      if (!this.account.tutorialDoneAt && this.profile.stats.caught === 0) this.startTutorial();
     });
+  }
+
+  startGame() {
+    this.sound.unlock();
+    acceptBetaNotice(this.account);
+    startSession(this.stats);
+    this.save();
+    this.ui.showHud();
+    this.state = 'idle';
+    if (pc.platform.touch) document.getElementById('touch').classList.remove('hidden');
+  }
+
+  // ---------- tutorial ----------
+  startTutorial() {
+    if (this.ui.modalOpen) this.ui.close();
+    if (this.state === 'title') this.startGame();
+    if (this.state !== 'catch') this.reelIn();
+    this.tutorial = createTutorial();
+    this.tutorialYaw = this.aim.yaw;
+    this.showCoach();
+  }
+
+  showCoach() {
+    const t = this.tutorial;
+    this.ui.coach(currentStep(t), t ? t.step : 0, STEPS.length, t?.note, !!pc.platform.touch);
+  }
+
+  tutorialEvent(event) {
+    if (!this.tutorial || !tutorialEvent(this.tutorial, event)) return;
+    if (this.tutorial.done) this.endTutorial();
+    else this.showCoach();
+  }
+
+  endTutorial() {
+    this.tutorial = null;
+    this.account.tutorialDoneAt = Date.now();
+    this.save();
+    this.ui.coach(null);
   }
 
   // ---------- input ----------
@@ -271,7 +306,10 @@ class Game {
     }, { passive: false });
 
     window.addEventListener('keydown', (e) => {
-      if (this.state === 'title') return;
+      if (this.state === 'title') {
+        if (e.code === 'Escape' && this.ui.modalOpen) this.ui.close();
+        return;
+      }
       const k = e.code;
       // Typing in a text box (the account name) shouldn't trigger game keys.
       if (e.target instanceof HTMLInputElement && e.target.type === 'text') {
@@ -461,10 +499,23 @@ class Game {
         p.loadout[data.slot] = data.id;
         if (data.slot === 'line' || data.slot === 'reel') this.resetDrag();
         this.reelIn();
+        this.tutorialEvent('reeled-in');
         break;
       case 'store-tab':
         this.ui.storeTab = data.tab;
         break;
+      case 'help-tab':
+        this.ui.helpTab = data.tab;
+        break;
+      case 'tutorial':
+        this.startTutorial();
+        return;
+      case 'tutorial-next':
+        this.tutorialEvent('next');
+        return;
+      case 'tutorial-skip':
+        this.endTutorial();
+        return;
       case 'store-buy': {
         if (buyWithReel(p, this.account, itemById(data.id))) {
           this.sound.cash();
@@ -724,6 +775,7 @@ class Game {
     this.state = 'flying';
     track(this.stats, 'sim-cast');
     this.sound.cast();
+    this.tutorialEvent('cast');
     const model = lure.kind === 'float' ? this.floatModel : this.lureModel;
     model.entity.enabled = true;
   }
@@ -821,11 +873,13 @@ class Game {
     if (L.dist < 2.5 || bottom < 0.12) {
       this.reelIn();
       this.ui.prompt('');
+      this.tutorialEvent('reeled-in');
       return;
     }
     if (L.dist > 80) {
       this.reelIn();
       this.ui.toast('Drifted too far. Reeled in.', 'bad');
+      this.tutorialEvent('reeled-in');
       return;
     }
 
@@ -853,6 +907,7 @@ class Game {
         this.bite.lastNibble = -1;
         this.state = 'bite';
         if (lure.kind === 'lure') this.sound.bite();
+        this.tutorialEvent('bite');
       }
     }
   }
@@ -895,6 +950,7 @@ class Game {
     this.bite = null;
     this.state = 'waiting';
     this.lure.settled = 0;
+    this.tutorialEvent('missed');
   }
 
   startFight(species, quality) {
@@ -923,6 +979,7 @@ class Game {
     this.state = 'fight';
     this.ui.showFight(true);
     this.ui.prompt('');
+    this.tutorialEvent('hooked');
   }
 
   fishWorld() {
@@ -992,6 +1049,7 @@ class Game {
       this.input.primary = false;
       this.input.secondary = false;
       this.fish.model.enabled = true;
+      this.tutorialEvent('fight-end');
       return;
     }
     if (result === 'snapped') this.sound.snap();
@@ -1002,6 +1060,7 @@ class Game {
     }
     this.ui.toast(RESULT_TEXT[result], 'bad');
     this.reelIn();
+    this.tutorialEvent('lost');
   }
 
   // Hold the catch up in front of the camera for the card (and the trophy photo).
@@ -1058,6 +1117,7 @@ class Game {
       this.sound.landed();
       this.ui.toast(`Level ${levelAfter}! New gear and waters`, 'good');
     }
+    this.tutorialEvent('catch-done');
   }
 
   // ---------- per frame ----------
@@ -1121,6 +1181,7 @@ class Game {
     this.consumeEdges();
 
     this.placeCamera(dt);
+    if (currentStep(this.tutorial)?.id === 'look' && Math.abs(this.aim.yaw - this.tutorialYaw) > 0.25) this.tutorialEvent('look');
     if (this.state === 'catch' && this.fish) this.holdFish();
     const cam = this.camera.getPosition();
     const hour = hourOf(this.world);

@@ -78,7 +78,7 @@
         <button data-panel="map">Map <kbd>M</kbd></button>
         <button data-panel="missions">Missions <kbd>O</kbd></button>
         <button data-panel="journal">Journal <kbd>J</kbd></button>
-        <button data-panel="help">Help <kbd>H</kbd></button>
+        <button data-panel="help">How to play <kbd>H</kbd></button>
         <button id="ff-button">Time ×20 <kbd>Z</kbd></button>
         <button id="photo-button">Photo <kbd>P</kbd></button>
         <button id="quality-button">Graphics</button>
@@ -114,7 +114,10 @@
           <strong>Phase 1 beta</strong>
           <p>Everything here uses play money. REEL points have no cash value and can't be bought, withdrawn or traded. Progress may be reset before launch, but store items stay on your account. Everyone who plays the beta gets the Founding Angler badge.</p>
         </div>
-        <button id="start-button" class="primary">Start fishing</button>
+        <div class="title-actions">
+          <button id="start-button" class="primary">Start fishing</button>
+          <button data-panel="help">How to play</button>
+        </div>
         <div class="controls-grid">
           <span>Aim</span><span>Mouse / A D</span>
           <span>Cast</span><span>Hold left click or Space, release</span>
@@ -140,6 +143,8 @@
     <section id="catch" class="catch hidden">
       <div class="catch-card" id="catch-card"></div>
     </section>
+
+    <div id="coach" class="coach hidden" role="dialog" aria-live="polite"></div>
 
     <div id="fade" class="fade"></div>
 
