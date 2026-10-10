@@ -113,6 +113,7 @@ const FS = /* glsl */ `
   uniform vec3 uAmbient;
   uniform float uGloss;
   uniform float uFoam;
+  uniform float uFix;
   varying vec3 vWorldPos;
   varying vec4 vInfo;
   varying vec2 vFlow;
@@ -162,6 +163,9 @@ const FS = /* glsl */ `
     vec4 n2 = texture2D(uNormalMap, uv2);
     float ripple = 0.35 + 0.45 * uWave.x + speed * 0.6;
     vec2 detail = ((n1.xy * 2.0 - 1.0) + (n2.xy * 2.0 - 1.0)) * 0.5 * ripple;
+    // Ripples finer than a pixel only shimmer as the camera turns, so they fade out as they shrink below one.
+    float texels = max(length(fwidth(uv1)), length(fwidth(uv2))) * 256.0;
+    detail *= 1.0 - uFix * smoothstep(1.5, 3.0, texels);
     if (uWave.w > 0.0) detail += rainRings(p, t) * uWave.w;
     vec3 N = normalize(vec3(-ws.y - detail.x * 0.35, 1.0, -ws.z - detail.y * 0.35));
 
@@ -197,9 +201,14 @@ const FS = /* glsl */ `
     float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
     vec3 color = mix(body, refl, clamp(fresnel * uReflect, 0.0, 1.0));
 
-    // Sun glints.
+    // Sun glints. A tight glint on rippled water sparkles as the camera turns, so where the normal changes
+    // faster than a pixel the highlight is widened to match (specular anti-aliasing).
+    vec3 dNx = dFdx(N);
+    vec3 dNy = dFdy(N);
+    float kernel = min(dot(dNx, dNx) + dot(dNy, dNy), 0.25) * uFix;
+    float gloss = 2.0 / (2.0 / (uGloss + 2.0) + kernel) - 2.0;
     vec3 H = normalize(L + V);
-    float spec = pow(max(dot(N, H), 0.0), uGloss) * (uGloss + 8.0) / 25.0;
+    float spec = pow(max(dot(N, H), 0.0), gloss) * (gloss + 8.0) / 25.0;
     color += uSunColor * spec * 0.6 * step(0.0, L.y);
 
     // Foam lapping along the shore, and white water where the river runs fast and shallow.
@@ -309,6 +318,7 @@ export class WaterSurface {
     this.material.setParameter('uPlanar', 0);
     this.material.setParameter('uPlanarScale', 1);
     this.material.setParameter('uSkyDetail', 1);
+    this.material.setParameter('uFix', 1);
     this.material.update();
     this.entity = null;
     this.planar = null;
