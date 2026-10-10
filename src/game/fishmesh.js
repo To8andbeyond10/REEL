@@ -95,6 +95,8 @@ function fishGeometry(species, m, dims) {
   };
   cap(starts[0], rings[0].z, -1);
   cap(starts[starts.length - 1], rings[rings.length - 1].z, 1);
+  // The body is everything so far; its normals are rebuilt as it bends. Fins keep their set normals.
+  g.body = { verts: g.count, idx: g.indices.length };
 
   // A flat fin. Its normal faces out to the side it is seen from, so both sides light the same.
   const tri = (a, b, c, col, nrm) => {
@@ -182,6 +184,43 @@ function fishGeometry(species, m, dims) {
   return g;
 }
 
+// Recomputes the body's vertex normals from its faces, so the flanks turn with the spine as the fish bends.
+// Each vertex averages the faces around it; `sign` keeps them pointing out of the body.
+function bodyNormals(pos, out, body, indices, sign) {
+  out.fill(0, 0, 3 * body.verts);
+  for (let t = 0; t < body.idx; t += 3) {
+    const a = 3 * indices[t];
+    const b = 3 * indices[t + 1];
+    const c = 3 * indices[t + 2];
+    const ux = pos[b] - pos[a];
+    const uy = pos[b + 1] - pos[a + 1];
+    const uz = pos[b + 2] - pos[a + 2];
+    const vx = pos[c] - pos[a];
+    const vy = pos[c + 1] - pos[a + 1];
+    const vz = pos[c + 2] - pos[a + 2];
+    const nx = (uy * vz - uz * vy) * sign;
+    const ny = (uz * vx - ux * vz) * sign;
+    const nz = (ux * vy - uy * vx) * sign;
+    out[a] += nx;
+    out[a + 1] += ny;
+    out[a + 2] += nz;
+    out[b] += nx;
+    out[b + 1] += ny;
+    out[b + 2] += nz;
+    out[c] += nx;
+    out[c + 1] += ny;
+    out[c + 2] += nz;
+  }
+  for (let v = 0; v < 3 * body.verts; v += 3) {
+    const len = Math.hypot(out[v], out[v + 1], out[v + 2]);
+    if (len > 1e-9) {
+      out[v] /= len;
+      out[v + 1] /= len;
+      out[v + 2] /= len;
+    }
+  }
+}
+
 // The geometry is built around the rest pose; each vertex knows how far back along the body it sits.
 export function buildFish(app, species) {
   const m = { deep: 0.26, snout: 0, barbels: false, scutes: false, length: 1, ...species.model };
@@ -198,6 +237,14 @@ export function buildFish(app, species) {
   const n = g.count;
   const rest = Float32Array.from(g.positions);
   const pos = Float32Array.from(g.positions);
+  const normals = Float32Array.from(g.normals);
+  // Face winding decides which way the faces point; flip the sum if the rest pose faces inward.
+  bodyNormals(rest, normals, g.body, g.indices, 1);
+  let facing = 0;
+  for (let v = 0; v < g.body.verts; v += 1) {
+    facing += normals[3 * v] * g.normals[3 * v] + normals[3 * v + 1] * g.normals[3 * v + 1] + normals[3 * v + 2] * g.normals[3 * v + 2];
+  }
+  const sign = facing < 0 ? -1 : 1;
   const reach = new Float32Array(n);
   for (let i = 0; i < n; i += 1) reach[i] = clamp((dims.half - rest[3 * i + 2]) / bodyLen, 0, 1.4);
 
@@ -224,7 +271,9 @@ export function buildFish(app, species) {
         const w = reach[i];
         pos[3 * i] = rest[3 * i] + amp * Math.pow(w, 1.5) * Math.sin(ph - 3.2 * w);
       }
+      bodyNormals(pos, normals, g.body, g.indices, sign);
       mesh.setPositions(pos);
+      mesh.setNormals(normals);
       mesh.update(pc.PRIMITIVE_TRIANGLES, false);
     }
   };
