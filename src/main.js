@@ -4,6 +4,7 @@ import { WorldScene } from './game/scene.js';
 import { QUALITY, Renderer, saveQuality } from './game/render.js';
 import { Life } from './game/life.js';
 import { Effects, FloatBobber, Lure, Rod } from './game/rig.js';
+import { BoatModel } from './game/boat.js';
 import { buildFish, swimFish } from './game/fishmesh.js';
 import { Ui } from './game/ui.js';
 import { Sound } from './game/audio.js';
@@ -17,11 +18,13 @@ import { ALL_GEAR, BAG_SIZE, bridge, buy, catchXp, gear, levelOf, loadProfile, o
 import { acceptBetaNotice, loadAccount, rename, saveAccount } from './sim/account.js';
 import { CAST_MS, BAITS, canTopUp, loadCash, modeFor, playCast, playFrenzyBuy, saveCash, topUp } from './sim/cashwaters.js';
 import { addPlayTime, clearStats, loadStats, saveStats, startSession, track } from './sim/telemetry.js';
-import { buyWithReel, completeCheckout, equipSkin, equippedSkin, itemById, startCheckout } from './sim/store.js';
+import { buyWithReel, equipSkin, equippedSkin, itemById } from './sim/store.js';
+import { cashItemById, completeCheckout, startCheckout, syncPaidGear } from './sim/checkout.js';
 import { createEvents, eventMultiplier, hotspots, stepEvents } from './sim/events.js';
 import { ensureMissions, missionCatch, missionSell } from './sim/missions.js';
 import { derbyCatch, register, settleDerby, stepDerby, upcomingDerbies } from './sim/derby.js';
 import { sonar } from './sim/sonar.js';
+import { boatPose, boatSpec, distanceOut, launchBoat, nearestSpot, stepBoat } from './sim/boats.js';
 import { STEPS, createTutorial, currentStep, tutorialEvent } from './sim/tutorial.js';
 import { clamp, createRng } from './sim/random.js';
 
@@ -46,6 +49,7 @@ class Game {
     })();
     this.profile = loadProfile(this.storage);
     this.account = loadAccount(this.storage);
+    syncPaidGear(this.profile, this.account);
     this.cash = loadCash(this.storage);
     this.cashPending = null;
     this.stats = loadStats(this.storage);
@@ -96,6 +100,10 @@ class Game {
     this.applySkins();
     this.lureModel = new Lure(this.app);
     this.effects = new Effects(this.app);
+    this.boatModel = new BoatModel(this.app);
+    this.boat = null;
+    this.boatBob = 0;
+    this.drive = { throttle: 0, steer: 0 };
     this.life = new Life(this.app, this.scene, this.effects);
     for (const s of SPECIES) this.fishModels[s.id] = buildFish(this.app, s);
     this.sound = new Sound();
@@ -121,9 +129,16 @@ class Game {
     return waterById(this.profile.water);
   }
   get pose() {
+    if (this.boat) {
+      const p = boatPose(this.boat, this.boat.spec);
+      p.eye += this.boatBob;
+      return p;
+    }
     return this.water.poses[this.profile.spot];
   }
+  // In a boat you fish over the nearest spot's fish.
   get spot() {
+    if (this.boat) return nearestSpot(this.water, this.boat.x, this.boat.z);
     return spotById(this.profile.spot);
   }
   get rodBroken() {
@@ -138,6 +153,7 @@ class Game {
 
   // Builds the scenery, weather and missions for the water you're on.
   loadWater() {
+    this.dockBoat(true);
     const water = this.water;
     this.scene.build(water);
     this.life.setWater(water);
@@ -146,6 +162,59 @@ class Game {
     this.aim.yaw = 0;
     this.placeCamera(0);
     this.updateEnvironment(true);
+  }
+
+  // ---------- boats ----------
+  toggleBoat() {
+    if (this.boat) return this.dockBoat();
+    const spec = boatSpec(this.profile);
+    if (!spec) return this.ui.toast('Buy a boat in Tackle (T) to drive out', 'bad');
+    if (this.state !== 'idle') return this.ui.toast('Reel in first');
+    const boat = launchBoat(this.water, this.pose, spec);
+    if (!boat) return this.ui.toast('No water deep enough to launch here', 'bad');
+    boat.spec = spec;
+    this.boat = boat;
+    this.aim.yaw = 0;
+    this.boatModel.show(spec.id);
+    document.getElementById('hud').classList.add('boating');
+    this.sound.plop(1.2);
+    this.effects.ripple(new pc.Vec3(boat.x, 0, boat.z), 1.2);
+    this.ui.toast(`${spec.name} launched`, 'good');
+  }
+
+  dockBoat(quiet = false) {
+    if (!this.boat) return;
+    if (!quiet && this.state !== 'idle') return this.ui.toast('Reel in first');
+    this.boat = null;
+    this.boatBob = 0;
+    this.drive = { throttle: 0, steer: 0 };
+    this.boatModel.hide();
+    document.getElementById('hud').classList.remove('boating', 'driving');
+    this.aim.yaw = 0;
+    this.placeCamera(0);
+    if (!quiet) this.ui.toast(`Back on the bank at ${this.spot.name}`);
+  }
+
+  updateBoat(dt, paused) {
+    if (!this.boat) return;
+    if (!paused) stepBoat(this.boat, this.water, this.boat.spec, this.state === 'idle' ? this.drive : {}, dt);
+    if (this.state !== 'idle') this.boat.speed = 0;
+    // The drive pad only shows while you can drive, so it's out of the way while fishing.
+    document.getElementById('hud').classList.toggle('driving', this.state === 'idle');
+    this.boatBob = this.boatModel.update(this.boat, performance.now() / 1000, this.world.weather === 'storm' ? 1 : 0);
+    if (Math.abs(this.boat.speed) > 1 && Math.random() < dt * 3) {
+      const f = forward(this.boat.heading);
+      this.effects.ripple(new pc.Vec3(this.boat.x - f.x * 1.5, 0, this.boat.z - f.z * 1.5), 0.4 + Math.abs(this.boat.speed) * 0.08);
+    }
+  }
+
+  boatPrompt() {
+    const b = this.boat;
+    const out = `${Math.round(distanceOut(b))}/${b.range} m out`;
+    const speed = `${Math.round(Math.abs(b.speed) * 3.6)} km/h`;
+    const warn = b.blocked === 'shore' ? 'Too shallow · ' : b.blocked === 'range' ? 'Edge of your range · ' : '';
+    const keys = pc.platform.touch ? '' : ' · W/S throttle, A/D steer, G to the bank · hold to cast';
+    return `${warn}${b.spec.name} · ${speed} · ${out}${keys}`;
   }
 
   resetDrag() {
@@ -198,8 +267,15 @@ class Game {
       const r = await completeCheckout(this.account, id);
       if (!r.ok) return this.ui.toast(r.why, 'bad');
       track(this.stats, 'purchase', { item: r.item.id, paidWith: 'usd', at: Date.now() });
-      equipSkin(this.account, r.item);
-      this.applySkins();
+      if (r.item.kind === 'gear') {
+        syncPaidGear(this.profile, this.account);
+        if (r.item.slot !== 'electronics') this.profile.loadout[r.item.slot] = r.item.id;
+        this.resetDrag();
+        this.ui.hud();
+      } else {
+        equipSkin(this.account, r.item);
+        this.applySkins();
+      }
       this.save();
       this.ui.toast(`${r.item.name} unlocked. Thanks for supporting Memefishing!`, 'good');
     } catch {
@@ -344,6 +420,16 @@ class Game {
       }
       if (this.blocked) return;
       if (e.repeat) return;
+      const driving = this.boat && this.state === 'idle';
+      if (k === 'KeyG') return this.toggleBoat();
+      if (driving && (k === 'KeyW' || k === 'KeyS')) {
+        this.drive.throttle = k === 'KeyW' ? 1 : -1;
+        return;
+      }
+      if (driving && (k === 'KeyA' || k === 'KeyD')) {
+        this.drive.steer = k === 'KeyA' ? 1 : -1;
+        return;
+      }
       if (k === 'Space') {
         e.preventDefault();
         down('primary');
@@ -362,12 +448,16 @@ class Game {
     window.addEventListener('keyup', (e) => {
       if (e.code === 'Space') up('primary');
       else if (e.code === 'KeyF') up('secondary');
-      else if (e.code === 'KeyA' || e.code === 'KeyD') this.aim.keys = 0;
+      else if (e.code === 'KeyA' || e.code === 'KeyD') {
+        this.aim.keys = 0;
+        this.drive.steer = 0;
+      } else if (e.code === 'KeyW' || e.code === 'KeyS') this.drive.throttle = 0;
     });
     // Losing focus releases everything so the reel never sticks on.
     window.addEventListener('blur', () => {
       up('primary');
       up('secondary');
+      this.drive = { throttle: 0, steer: 0 };
     });
 
     document.querySelectorAll('[data-touch]').forEach((b) => {
@@ -380,9 +470,14 @@ class Game {
         else if (t === 'drag-down') this.adjustDrag(-0.2);
         else if (t === 'speed-up') this.reelGear = Math.min(5, this.reelGear + 1);
         else if (t === 'speed-down') this.reelGear = Math.max(1, this.reelGear - 1);
+        else if (t === 'boat') this.toggleBoat();
+        else if (t === 'fwd' || t === 'back') this.drive.throttle = t === 'fwd' ? 1 : -1;
+        else if (t === 'left' || t === 'right') this.drive.steer = t === 'left' ? 1 : -1;
       });
       const release = () => {
         if (t === 'primary' || t === 'secondary') up(t);
+        else if (t === 'fwd' || t === 'back') this.drive.throttle = 0;
+        else if (t === 'left' || t === 'right') this.drive.steer = 0;
       };
       b.addEventListener('pointerup', release);
       b.addEventListener('pointercancel', release);
@@ -496,6 +591,7 @@ class Game {
         break;
       }
       case 'equip':
+        if (data.slot === 'boat') this.dockBoat(true);
         p.loadout[data.slot] = data.id;
         if (data.slot === 'line' || data.slot === 'reel') this.resetDrag();
         this.reelIn();
@@ -526,7 +622,7 @@ class Game {
         break;
       }
       case 'store-card':
-        startCheckout(itemById(data.id), this.account)
+        startCheckout(cashItemById(data.id), this.account)
           .then((url) => {
             this.save();
             window.location.href = url;
@@ -646,6 +742,7 @@ class Game {
     if (!travel(this.profile, id)) return;
     this.ui.close();
     this.reelIn();
+    this.dockBoat(true);
     this.ui.fade(true);
     setTimeout(() => {
       this.advanceMinutes(20);
@@ -791,9 +888,11 @@ class Game {
       return;
     }
     if (this.state === 'idle') {
-      this.ui.prompt(`Hold to cast · ${g.lure.name}`);
+      if (this.boat) this.ui.prompt(this.boatPrompt());
+      else this.ui.prompt(`Hold to cast · ${g.lure.name}${boatSpec(this.profile) ? ' · G launch boat' : ''}`);
       if (this.input.primaryEdge) {
         this.state = 'charging';
+        this.drive = { throttle: 0, steer: 0 };
         this.castPower = 0;
         this.chargeDir = 1;
       }
@@ -1180,6 +1279,7 @@ class Game {
     }
     this.consumeEdges();
 
+    this.updateBoat(dt, paused);
     this.placeCamera(dt);
     if (currentStep(this.tutorial)?.id === 'look' && Math.abs(this.aim.yaw - this.tutorialYaw) > 0.25) this.tutorialEvent('look');
     if (this.state === 'catch' && this.fish) this.holdFish();

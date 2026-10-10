@@ -9,6 +9,7 @@ import { missionLabel } from '../sim/missions.js';
 import { FORMATS, derbyActive, formatScore, prizePool, standings, upcomingDerbies } from '../sim/derby.js';
 import { EFFECT_TEXT, SKIN_SLOTS, canBuyItem, equippedSkin, itemsFor, ownsSkin } from '../sim/store.js';
 import { FLAGS } from '../sim/flags.js';
+import { gearUsd } from '../sim/checkout.js';
 import { BADGES } from '../sim/account.js';
 import { BAITS, CATCH_LOOK, canTopUp, castCost, frenzyCost, modeFor, stakeOf } from '../sim/cashwaters.js';
 import { summary, track } from '../sim/telemetry.js';
@@ -358,7 +359,7 @@ export class Ui {
 
   tackle() {
     const { profile } = this.game;
-    const tabs = [['rod', 'Rods'], ['reel', 'Reels'], ['line', 'Lines'], ['lure', 'Lures and rigs'], ['electronics', 'Electronics']];
+    const tabs = [['rod', 'Rods'], ['reel', 'Reels'], ['line', 'Lines'], ['lure', 'Lures and rigs'], ['electronics', 'Electronics'], ['boat', 'Boats']];
     const items = ALL_GEAR.filter((i) => i.slot === this.tab);
     const stat = (k, v) => `<span>${k} <b>${v}</b></span>`;
     const stats = (i) => {
@@ -366,6 +367,7 @@ export class Ui {
       if (i.slot === 'reel') return stat('Max drag', `${i.maxDrag} kg`) + stat('Retrieve', `${i.speed} m/s`) + stat('Spool', `${i.capacity} m`);
       if (i.slot === 'line') return stat('Breaks at', `${i.strength} kg`) + stat('Stretch', `${Math.round(i.stretch * 100)}%`) + stat('Visibility', i.visibility > 0.5 ? 'High' : i.visibility > 0.2 ? 'Medium' : 'Low');
       if (i.slot === 'electronics') return stat('Toggle', 'K');
+      if (i.slot === 'boat') return stat('Top speed', `${Math.round(i.speed * 3.6)} km/h`) + stat('Range', `${i.range} m from your spot`) + stat('Launch', 'G');
       const kind = i.kind === 'float' ? 'Float' : i.kind === 'bottom' ? 'Bottom' : i.topwater ? 'Topwater' : `Runs ${i.dive} m`;
       return stat('Type', kind) + (i.idealSpeed ? stat('Best speed', `${i.idealSpeed} m/s`) : '');
     };
@@ -378,7 +380,11 @@ export class Ui {
         : owned
           ? `<button data-action="equip" data-id="${i.id}" data-slot="${i.slot}">Equip</button>`
           : `<button class="primary" data-action="buy" data-id="${i.id}" ${check.ok ? '' : 'disabled'}>${check.ok ? 'Buy' : check.why}</button>`;
-      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${i.name}</h3><div class="stats">${stats(i)}</div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${owned ? 'Owned' : `${fmt(i.price)} REEL · Lv ${i.level}`}</span>${btn}</div></div>`;
+      // Card buys unlock now, before the level is reached.
+      const usd = !owned && FLAGS.realMoneyPayments ? gearUsd(i.id) : 0;
+      const locked = levelOf(profile.xp) < i.level;
+      const payBtn = usd ? `<button data-action="store-card" data-id="${i.id}">${locked ? 'Unlock now' : 'Pay'} $${usd.toFixed(2)} by card</button>` : '';
+      return `<div class="item ${equipped ? 'equipped' : ''}"><h3>${i.name}</h3><div class="stats">${stats(i)}</div><div class="note">${i.blurb}</div><div class="foot"><span class="price">${owned ? 'Owned' : `${fmt(i.price)} REEL · Lv ${i.level}`}</span>${btn}${payBtn}</div></div>`;
     };
     const rod = byId(RODS, profile.loadout.rod);
     const repair = this.game.rodBroken
@@ -717,6 +723,7 @@ export class Ui {
             ${card('Drag', 'The setting that ties it together. Mouse wheel or [ ]. It starts at half your line strength. Lower it for big fish so the reel gives line instead of snapping; raise it so you can gain line on a tired fish.')}
             ${card('Broken rod', 'Over-load the rod and it breaks. Repair it in Tackle (a quarter of its price, at least 20 REEL) before your next cast.')}
             ${card('Fish finder', 'Electronics in Tackle. Sonar on your HUD shows the bottom, your lure and fish along your cast line. K turns it on and off.')}
+            ${card('Boats', 'Buy one in Tackle (Boats). Press G to launch from your spot, W and S for throttle, A and D to steer, and G again to get back on the bank. The boat goes as far as its range from where you launched. You fish over the nearest spot’s fish, so you can reach deep water the bank can’t. Stop to cast; the boat holds still while your line is out.')}
           </div>
           <div class="section"><h3>Rigs and lures</h3><table class="keys">${LURES.map((l) => {
             const how = l.kind === 'float' ? 'Hangs bait under a float at the depth you set. Wait for the dip, then strike.' : l.kind === 'bottom' ? 'Sits on the bottom. Watch the rod tip.' : l.topwater ? `Works on the surface. Pop it and pause; best around ${l.idealSpeed} m/s.` : `Must be retrieved. Runs about ${l.dive} m deep; best at ${l.idealSpeed} m/s${l.pauseAppeal >= 0.6 ? ', and fish hit it on the pause' : ''}.`;
@@ -757,7 +764,7 @@ export class Ui {
             ${card('What it sells', 'New looks for your float and rod. Open it with U.')}
             ${card('Looks only', "Store items never change bites, fights, prices or odds. Each card says what you get, and nothing is random.")}
             ${card('Your account', 'Items are saved to your angler account and stay even if beta progress is reset. They can’t be traded or sold. Set your angler name in the Store.')}
-            ${card('Paying', FLAGS.realMoneyPayments ? 'Pay with REEL from fishing, or by card. Card details go to Stripe’s checkout page, never to the game.' : 'Store items cost REEL from fishing.')}
+            ${card('Paying', FLAGS.realMoneyPayments ? 'Pay with REEL from fishing, or by card. Card details go to Stripe’s checkout page, never to the game. In Tackle, gear can be unlocked by card before you reach its level; it can always be earned with REEL too.' : 'Store items cost REEL from fishing.')}
           </div>`
       },
       controls: {
@@ -779,6 +786,8 @@ export class Ui {
           ['Time ×20', 'Z', 'Menu bar'],
           ['Photo mode', 'P, then click or Space to snap', 'Menu bar'],
           ['Fish finder on/off', 'K', ''],
+          ['Launch or dock a boat', 'G', 'Boat'],
+          ['Drive a boat', 'W / S throttle, A / D steer', 'Arrow pad'],
           ['Close a menu', 'Esc', 'Close']
         ])}<p class="note">Graphics (Low, Medium, High) and Sound are on the menu bar.</p>`
       }

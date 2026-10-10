@@ -19,6 +19,7 @@ The design is in [docs/DESIGN.md](docs/DESIGN.md) and what comes next is in [doc
   - fog and snow.
 - **Missions:** three contracts per water. **Derbies:** four-hour competitions against rival anglers with prize pools.
 - **Gear:** 4 rods, 4 reels, 4 lines, 7 rigs and a fish finder (sonar along your cast line). Big-game gear for sturgeon and gar.
+- **Boats:** a Moon Kayak and a Lambo Bass Boat. Launch from your spot, drive out to water the bank can't reach and fish from the boat. Each boat has its own speed and range, river current pushes it downstream, and it can't run aground.
 - **13 species** with real fish habits: depth, favourite lures, retrieve speed, time of day and weather.
 - **Bites:** floats nibble then go under; lures thump the rod. Strike on the take.
 - **The fight:** line tension, drag that slips, head shakes, runs, dives, jumps, rod load and slack line. River current adds pull.
@@ -49,6 +50,7 @@ npm test   # fight, bite, waters, events, missions, derby, sonar and balance tes
 | Float depth | Q / E (or in Tackle) | Tackle |
 | Menus | T tackle, C Cash Waters, U store, B market, M map and waters, O missions and derbies, J journal, H help | Buttons |
 | Fish finder | K | Tackle |
+| Boat | G to launch or dock, then W / S throttle and A / D steer | Boat, then the arrow pad |
 | Photo mode | P, then click or Space to snap | Photo button |
 | Time ×20 | Z | Button |
 
