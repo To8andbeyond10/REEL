@@ -1,6 +1,6 @@
 # Memefishing: top-tier feature roadmap
 
-What a top-tier fishing game needs to keep players coming back, what this build already has, and what to build next, in order. Fishing Planet is the reference for how the game should play and feel; nothing here copies its names, art or assets. REEL stays an in-game currency with no blockchain, wallet or real money.
+What a top-tier fishing game needs to keep players coming back, what this build already has, and what to build next, in order. Fishing Planet is the reference for how the game should play and feel; nothing here copies its names, art or assets.
 
 ## Shipped in this build
 

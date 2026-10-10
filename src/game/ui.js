@@ -341,8 +341,7 @@ export class Ui {
     return `${repair}<div class="tabs">${tabs.map(([k, l]) => `<button data-action="tab" data-tab="${k}" class="${this.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${this.tab === 'lure' ? floatRow : ''}
       <div class="grid">${items.map(card).join('')}</div>
-      <p class="note">Tip: the drag should sit well under your line's break strength. Shakes and surges spike the tension above it.</p>
-      <p class="note">All prices are in REEL, the game's play money. You earn it by fishing. It can't be bought with real money or cashed out.</p>`;
+      <p class="note">Tip: the drag should sit well under your line's break strength. Shakes and surges spike the tension above it.</p>`;
   }
 
   market() {
@@ -363,7 +362,7 @@ export class Ui {
           .join('')}</table><div class="rest" style="margin-top:8px"><button class="primary" data-action="sell-all">Sell whole bag</button></div>`
       : '<p class="note">Your bag is empty. Catch something and bag it to sell here.</p>';
     const news = market.news.length ? market.news.map((n) => `<div class="${n.tone === 'bad' ? 'down' : 'up'}">${n.text}</div>`).join('') : '<div class="note">Quiet market.</div>';
-    return `<p class="note">Prices are REEL per kg and move every game minute. REEL is play money: no real money goes in or comes out. Sell into a pump, hold through a dip. A pump sends that fish into a feeding frenzy; a rug pull puts it off the bite. ${SENTIMENT[market.sentiment].label}${market.sentiment === 'bull' ? ': fish are hungrier.' : market.sentiment === 'bear' ? ': fish are sluggish.' : '.'} Faded rows don't live in ${water.name}.</p>
+    return `<p class="note">Prices are REEL per kg and move every game minute. Sell into a pump, hold through a dip. A pump sends that fish into a feeding frenzy; a rug pull puts it off the bite. ${SENTIMENT[market.sentiment].label}${market.sentiment === 'bull' ? ': fish are hungrier.' : market.sentiment === 'bear' ? ': fish are sluggish.' : '.'} Faded rows don't live in ${water.name}.</p>
       <table><tr><th>Species</th><th>Ticker</th><th>Price/kg</th><th>1h</th><th>Chart</th></tr>${rows}</table>
       <div class="section"><h3>Your bag (${profile.bag.length}/${BAG_SIZE})</h3>${bag}</div>
       <div class="section"><h3>News</h3>${news}</div>`;
