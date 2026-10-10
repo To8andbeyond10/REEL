@@ -283,3 +283,21 @@ body.photo #hud { display: none; }
 .swatch.float i { flex: 1; }
 .swatch.float i:first-child { flex: 0.4; }
 .swatch.rod { width: 28px; height: 8px; vertical-align: 2px; }
+
+/* Tutorial coach and How to play */
+.title-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.coach { position: fixed; top: 46px; left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); background: var(--panel-solid); border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; font-size: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
+.coach.behind { display: none; }
+.coach h3 { margin: 2px 0 4px; font-size: 17px; color: var(--accent); }
+.coach p { margin: 4px 0 0; line-height: 1.4; }
+.coach .coach-note { color: var(--warn); font-weight: 600; }
+.coach-head { display: flex; justify-content: space-between; align-items: center; }
+.coach-head button { padding: 2px 8px; font-size: 12px; color: var(--muted); }
+.coach-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
+.keys { width: 100%; border-collapse: collapse; font-size: 13px; }
+.keys td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.keys td:first-child { color: var(--muted); }
+@media (max-width: 760px) {
+  .coach { top: 150px; font-size: 13px; padding: 10px 12px; }
+  .keys td { padding: 5px 4px; font-size: 12px; }
+}

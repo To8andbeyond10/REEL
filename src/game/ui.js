@@ -31,13 +31,14 @@ export class Ui {
       'hud', 'clock', 'day', 'weather', 'temp', 'forecast', 'spot-name', 'ff-row', 'ticker', 'wallet', 'level', 'bag', 'xp-fill', 'sentiment', 'news',
       'events', 'derby', 'sonar', 'prompt', 'toast', 'cast-meter', 'cast-fill', 'fight-panel', 'tension-text', 'tension-fill', 'drag-mark', 'rod-text', 'rod-fill',
       'line-out', 'fish-dist', 'fight-state', 'g-rod', 'g-reel', 'g-line', 'g-lure', 'g-drag', 'g-speed', 'g-depth', 'g-depth-label',
-      'g-dist', 'title', 'modal', 'modal-title', 'modal-body', 'catch', 'catch-card', 'fade', 'touch', 'ff-button', 'mute-button'
+      'g-dist', 'title', 'modal', 'modal-title', 'modal-body', 'catch', 'catch-card', 'fade', 'touch', 'ff-button', 'mute-button', 'coach'
     ]) {
       this.el[id] = $(id);
     }
     this.panel = null;
     this.tab = 'rod';
     this.storeTab = 'float';
+    this.helpTab = 'start';
     this.toastTimer = 0;
     this.lastNews = null;
     this.tickerAt = -1;
@@ -50,6 +51,12 @@ export class Ui {
     });
     this.el['modal-body'].addEventListener('input', (e) => {
       if (e.target.id === 'float-depth') this.game.action('float-depth', { value: e.target.value });
+    });
+    this.el.coach.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-action]');
+      if (!t) return;
+      t.blur(); // so Space casts instead of pressing the button again
+      this.game.action(t.dataset.action, t.dataset);
     });
     this.el['catch-card'].addEventListener('click', (e) => {
       const t = e.target.closest('[data-action]');
@@ -282,20 +289,23 @@ export class Ui {
     if (name !== 'photo' && (st === 'fight' || st === 'bite' || st === 'catch')) return;
     this.panel = name;
     this.el.modal.classList.remove('hidden');
+    this.el.coach.classList.add('behind');
     this.render();
     this.game.sound.ui();
+    this.game.tutorialEvent(`panel:${name}`);
   }
 
   close() {
     const wasPhoto = this.panel === 'photo';
     this.panel = null;
     this.el.modal.classList.add('hidden');
+    this.el.coach.classList.remove('behind');
     if (wasPhoto && this.game.state === 'catch') this.el.catch.classList.remove('hidden');
   }
 
   render() {
     if (!this.panel) return;
-    const titles = { store: 'Store', tackle: 'Tackle shop', market: 'Fish market', map: this.game.water.name, journal: 'Fish journal', missions: 'Missions and derbies', help: 'How to fish', photo: 'Photo' };
+    const titles = { store: 'Store', tackle: 'Tackle shop', market: 'Fish market', map: this.game.water.name, journal: 'Fish journal', missions: 'Missions and derbies', help: 'How to play', photo: 'Photo' };
     this.el['modal-title'].textContent = titles[this.panel];
     const body = this.el['modal-body'];
     if (this.panel === 'photo') return;
@@ -575,19 +585,116 @@ export class Ui {
     return `<p class="note">${found}/${SPECIES.length} species · Caught ${st.caught} · Released ${st.released} · Sold ${st.sold} for ${fmt(st.earned)} REEL · Missions ${st.missions} · Derbies ${st.derbies} (${st.derbyWins} won)</p><div class="grid">${cards}</div>`;
   }
 
+  // How to play: the whole game in one place, for new players and for anyone reviewing it.
   help() {
-    return `<div class="grid">
-      <div class="item"><h3>1. Rig up</h3><div class="note">Open Tackle. Floats catch gills and perch near the dock. Spinners and jigs need retrieving. Bottom rigs at night find catfish. Set float depth to where fish feed.</div></div>
-      <div class="item"><h3>2. Cast</h3><div class="note">Hold left click or Space to build power, release to cast. Aim with the mouse.</div></div>
-      <div class="item"><h3>3. Fish the lure</h3><div class="note">Hold to retrieve. W and S change reel speed; each lure has a best speed. Right click hops a jig. Pause to let it sink. On the river, let your float drift with the current.</div></div>
-      <div class="item"><h3>4. Strike</h3><div class="note">Float rigs nibble first. Strike (right click or F) when the float goes under. Lures thump the rod tip: strike fast.</div></div>
-      <div class="item"><h3>5. Fight</h3><div class="note">Set the drag (mouse wheel) below your line's limit. Reel when the fish rests, stop on head shakes and runs, lift the rod (hold right click) to tire it. Keep the line tight or it throws the hook.</div></div>
-      <div class="item"><h3>6. Bag or release</h3><div class="note">Bag fish and sell them at the Fish Market when the price is right, or release them for more XP. Take a trophy photo first.</div></div>
-      <div class="item"><h3>Waters</h3><div class="note">Bridge to Shitcoin Swamp, Bull Run River and Cold Wallet Lake from the Map (M). Each has its own fish, weather and a legendary.</div></div>
-      <div class="item"><h3>Live events</h3><div class="note">Whale alerts mean a legendary is boiling nearby. Diving birds mark a bait ball. Pumps start feeding frenzies; storms make fish feed hard before they hit.</div></div>
-      <div class="item"><h3>Missions and derbies</h3><div class="note">Open Missions (O) for contracts on each water and four-hour derbies against rival anglers.</div></div>
-      <div class="item"><h3>Extras</h3><div class="note">Fish finder: buy it in Tackle, toggle with K. Photo mode: P, then click or Space to snap. Time ×20: Z.</div></div>
-    </div>`;
+    const card = (title, text) => `<div class="item"><h3>${title}</h3><div class="note" style="margin:0">${text}</div></div>`;
+    const keys = (rows) => `<table class="keys">${rows.map(([what, desk, touch]) => `<tr><td>${what}</td><td>${desk}</td><td>${touch}</td></tr>`).join('')}</table>`;
+    const pages = {
+      start: {
+        label: 'Start here',
+        html: `<p class="note" style="margin-top:0">Memefishing is a first-person fishing sim. You stand on the bank, rig your gear, cast, hook and fight fish, then sell them on a market where every species trades like a memecoin. Selling earns REEL, the in-game coin, which buys better gear and opens new waters.</p>
+          <div class="grid">
+            ${card('1. Catch', 'Cast, wait for a bite, strike, and play the fish to the bank without snapping the line.')}
+            ${card('2. Sell', 'Bag fish and sell them at the Fish Market (B) when the price is up, or release them for more XP.')}
+            ${card('3. Upgrade', 'Spend REEL on rods, reels, lines and lures in Tackle (T). Levels unlock better gear.')}
+            ${card('4. Explore', 'Move to new spots and bridge to new waters from the Map (M). Take on missions and derbies (O).')}
+          </div>
+          <div class="section"><h3>Tutorial</h3><p class="note">A coached walk through your first catch. It runs the first time you play and you can replay it any time.</p><button class="primary" data-action="tutorial">Replay tutorial</button></div>`
+      },
+      fishing: {
+        label: 'Fishing',
+        html: `<div class="grid">
+            ${card('Cast', 'Hold left click or Space to build power and release to cast. The meter swings back and forth, so let go near the top. Aim with the mouse.')}
+            ${card('Float rigs', 'A worm or minnow hangs under a float. Set the depth with Q and E (or in Tackle) to where fish feed, then wait. A nibble makes the float bob; a bite pulls it under.')}
+            ${card('Lures', 'Spinners, jigs, poppers and crankbaits must be retrieved. Hold to reel, W and S change reel speed (each lure has a best speed). Right click hops the lure; pausing lets it sink.')}
+            ${card('Bottom rigs', 'Sit on the bottom. Watch the rod tip. Good at night for catfish.')}
+            ${card('Strike', 'Right click or F when the float goes under or the rod thumps. Too early spooks the fish; too late and it steals the bait. Lures often hook fish by themselves if you keep reeling through the take.')}
+            ${card('Fight', 'Watch the tension bar. Reel when the fish rests. Stop when it runs or shakes its head. Hold right click to lift the rod and tire it. Keep the line tight or the hook pulls out.')}
+            ${card('Drag', 'The mouse wheel or [ and ] set the drag. Below your line strength the reel gives line instead of snapping. Too loose and the fish runs off all your line.')}
+            ${card('Landing', 'Bag it (6 fish fit in the bag), sell it straight away at a 20% discount, or release it for extra XP. Trophy photo saves a picture with the weight on it.')}
+            ${card('Read the water', 'Each species feeds at certain times and depths and likes certain baits. The Fish Journal (J) lists what you have learned. Weather and time of day change what bites.')}
+          </div>`
+      },
+      gear: {
+        label: 'Gear',
+        html: `<div class="grid">
+            ${card('Rods', 'Max load is how hard you can pull before the rod breaks; longer rods cast further. A broken rod must be repaired in Tackle before you can fish with it.')}
+            ${card('Reels', 'Max drag, retrieve speed and line capacity. Big fish need big reels.')}
+            ${card('Lines', 'Strength is the pull that snaps it. Fluoro is nearly invisible so wary fish bite more. Braid is strong but has no stretch, so head shakes hit hard.')}
+            ${card('Baits and lures', 'You start with a worm float rig and a spinner. Jigs, poppers, bottom rigs, crankbaits and live minnows unlock as you level.')}
+            ${card('Fish finder', 'Buy it in Tackle. Sonar on your HUD shows the bottom, your lure and fish along your cast line. K turns it on and off.')}
+            ${card('Levels', 'Every fish kept or released earns XP. New levels unlock gear, spots and waters.')}
+          </div>`
+      },
+      waters: {
+        label: 'Waters and events',
+        html: `<div class="grid">
+            ${card('Genesis Lake', 'Your home water. Pines, reeds and an old dock. Every technique works here.')}
+            ${card('Shitcoin Swamp', 'Level 2, 30 REEL gas to bridge. Murky water, fog and frogs.')}
+            ${card('Bull Run River', 'Level 3, 60 REEL gas. A current carries floats downstream: let them drift.')}
+            ${card('Cold Wallet Lake', 'Level 4, 90 REEL gas. Cold, deep and clear.')}
+            ${card('Spots', 'Each water has several spots. Move between them from the Map (M); new ones cost REEL and a level to unlock.')}
+            ${card('Legendaries', 'Each water has its own legendary fish. They need the right gear, place and time.')}
+            ${card('Live events', 'Whale alerts mean a legendary is boiling nearby. Diving birds mark bait. Pumps start feeding frenzies; rugs make fish sulk. Storm fronts make fish feed hard before they hit.')}
+            ${card('Time and weather', 'A clock runs all day and night, with sun, cloud, rain, storms, fog and snow. Z runs time ×20 while you wait. Rest from the Map to skip ahead.')}
+          </div>`
+      },
+      money: {
+        label: 'REEL and the market',
+        html: `<div class="grid">
+            ${card('REEL', 'The in-game coin. Your wallet is at the top right. You earn it by selling fish, finishing missions and placing in derbies.')}
+            ${card('Fish market', 'Every species has a ticker and a price that moves all day. Prices are per kg. Sell when the chart is up (B).')}
+            ${card('Market mood', 'The market flips between bull runs, crabbing and bear markets. Fish bite more in a bull run.')}
+            ${card('Spending', 'Tackle and gear, unlocking spots, gas to bridge to other waters, rod repairs, derby entry fees and Store looks.')}
+            ${card('Missions', 'Contracts on each water: catch a species, beat a weight, fish a lure, fish at night, release fish or sell well. Each water also has a legendary contract. Rewards are REEL and XP (O).')}
+            ${card('Derbies', 'Four-hour competitions against seven rival anglers: heaviest fish, best 3-fish bag or most fish. Pay the entry, and the top three split the pool.')}
+          </div>`
+      },
+      store: {
+        label: 'Store',
+        html: `<div class="grid">
+            ${card('What it sells', 'New looks for your float and rod. Open it with U.')}
+            ${card('Looks only', "Store items never change bites, fights, prices or odds. Each card says what you get, and nothing is random.")}
+            ${card('Your account', 'Items are saved to your angler account and stay even if beta progress is reset. They can’t be traded or sold. Set your angler name in the Store.')}
+            ${card('Paying', 'During the beta, store items cost REEL from fishing. Real-money purchases are off.')}
+          </div>`
+      },
+      controls: {
+        label: 'Controls',
+        html: `${keys([
+          ['<b>Action</b>', '<b>Keyboard and mouse</b>', '<b>Phone</b>'],
+          ['Aim', 'Mouse, A / D', 'Drag the screen'],
+          ['Cast', 'Hold left click or Space, release', 'Hold Cast / Reel, release'],
+          ['Reel / retrieve', 'Hold left click or Space', 'Hold Cast / Reel'],
+          ['Strike, lift rod, hop lure', 'Right click or F', 'Strike / Lift'],
+          ['Drag', 'Mouse wheel or [ ]', 'Drag − / +'],
+          ['Reel speed', 'W / S', 'Speed − / +'],
+          ['Float depth', 'Q / E', 'Tackle menu'],
+          ['Tackle, Store, Market', 'T / U / B', 'Menu bar'],
+          ['Map, Missions, Journal', 'M / O / J', 'Menu bar'],
+          ['How to play', 'H', 'Menu bar'],
+          ['Time ×20', 'Z', 'Menu bar'],
+          ['Photo mode', 'P, then click or Space to snap', 'Menu bar'],
+          ['Fish finder on/off', 'K', ''],
+          ['Close a menu', 'Esc', 'Close']
+        ])}<p class="note">Graphics (Low, Medium, High) and Sound are on the menu bar.</p>`
+      }
+    };
+    const tab = pages[this.helpTab] ? this.helpTab : 'start';
+    const tabs = Object.entries(pages)
+      .map(([k, p]) => `<button data-action="help-tab" data-tab="${k}" class="${tab === k ? 'on' : ''}">${p.label}</button>`)
+      .join('');
+    return `<div class="tabs">${tabs}</div>${pages[tab].html}`;
+  }
+
+  // The tutorial coach card. step is null when the tutorial isn't running.
+  coach(step, index, total, note, touch = false) {
+    const el = this.el.coach;
+    el.classList.toggle('hidden', !step);
+    if (!step) return;
+    const buttons = step.next ? `<button class="primary" data-action="tutorial-next">${step.last ? 'Start fishing' : 'Next'}</button>` : '';
+    el.innerHTML = `<div class="coach-head"><span class="label">Tutorial ${index + 1}/${total}</span>${step.last ? '' : '<button class="ghost" data-action="tutorial-skip">Skip tutorial</button>'}</div>
+      <h3>${step.title}</h3>${note ? `<p class="coach-note">${note}</p>` : ''}<p>${(touch && step.touch) || step.text}</p>${buttons ? `<div class="coach-foot">${buttons}</div>` : ''}`;
   }
 
   catchCard(info) {
