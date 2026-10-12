@@ -1,14 +1,14 @@
-// POST /api/checkout { item, account } -> { url } of a Stripe Checkout page for one store item.
+// POST /api/checkout { item, account } -> { url } of a Stripe Checkout page for one market item.
 // The price is looked up here, so a player can't change what they pay.
-import { itemById } from '../src/sim/store.js';
+import { cashItemById } from '../src/sim/checkout.js';
 import { ACCOUNT_ID, enabled, stripe } from './_stripe.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
   if (!enabled()) return res.status(503).json({ error: 'Card payments are switched off.' });
   const { item: itemId, account } = req.body || {};
-  const item = itemById(itemId);
-  if (!item || !(item.usd > 0)) return res.status(400).json({ error: 'Unknown item.' });
+  const item = cashItemById(itemId);
+  if (!item) return res.status(400).json({ error: 'Unknown item.' });
   if (!ACCOUNT_ID.test(String(account))) return res.status(400).json({ error: 'Unknown account.' });
   const origin = process.env.PUBLIC_URL || `https://${req.headers.host}`;
   try {
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         'line_items[0][price_data][currency]': 'usd',
         'line_items[0][price_data][unit_amount]': String(Math.round(item.usd * 100)),
         'line_items[0][price_data][product_data][name]': `Memefishing: ${item.name}`,
-        'line_items[0][price_data][product_data][description]': 'Cosmetic look for your float or rod. Looks only.',
+        'line_items[0][price_data][product_data][description]': item.kind === 'gear' ? 'Fishing gear, unlocked now on your angler account.' : 'A new look for your float or rod. Looks only.',
         client_reference_id: account,
         'metadata[item]': item.id,
         'metadata[account]': account,
