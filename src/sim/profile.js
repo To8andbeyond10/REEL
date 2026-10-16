@@ -1,5 +1,5 @@
 // The angler's wallet, gear, bag, journal, missions and level. Saved to the browser.
-import { ELECTRONICS, LINES, LURES, REELS, RODS, byId } from './data.js';
+import { BOATS, ELECTRONICS, LINES, LURES, REELS, RODS, byId } from './data.js';
 import { spotById, waterById } from './waters.js';
 
 export const SAVE_KEY = 'memefishing-save-v2';
@@ -74,7 +74,8 @@ export const ALL_GEAR = [
   ...REELS.map((g) => ({ ...g, slot: 'reel' })),
   ...LINES.map((g) => ({ ...g, slot: 'line' })),
   ...LURES.map((g) => ({ ...g, slot: 'lure' })),
-  ...ELECTRONICS.map((g) => ({ ...g, slot: 'electronics' }))
+  ...ELECTRONICS.map((g) => ({ ...g, slot: 'electronics' })),
+  ...BOATS.map((g) => ({ ...g, slot: 'boat' }))
 ];
 
 export const owns = (profile, id) => profile.owned.includes(id);

@@ -359,7 +359,7 @@ export class Ui {
 
   tackle() {
     const { profile } = this.game;
-    const tabs = [['rod', 'Rods'], ['reel', 'Reels'], ['line', 'Lines'], ['lure', 'Lures and rigs'], ['electronics', 'Electronics']];
+    const tabs = [['rod', 'Rods'], ['reel', 'Reels'], ['line', 'Lines'], ['lure', 'Lures and rigs'], ['electronics', 'Electronics'], ['boat', 'Boats']];
     const items = ALL_GEAR.filter((i) => i.slot === this.tab);
     const stat = (k, v) => `<span>${k} <b>${v}</b></span>`;
     const stats = (i) => {
@@ -367,6 +367,7 @@ export class Ui {
       if (i.slot === 'reel') return stat('Max drag', `${i.maxDrag} kg`) + stat('Retrieve', `${i.speed} m/s`) + stat('Spool', `${i.capacity} m`);
       if (i.slot === 'line') return stat('Breaks at', `${i.strength} kg`) + stat('Stretch', `${Math.round(i.stretch * 100)}%`) + stat('Visibility', i.visibility > 0.5 ? 'High' : i.visibility > 0.2 ? 'Medium' : 'Low');
       if (i.slot === 'electronics') return stat('Toggle', 'K');
+      if (i.slot === 'boat') return stat('Top speed', `${Math.round(i.speed * 3.6)} km/h`) + stat('Range', `${i.range} m from your spot`) + stat('Launch', 'G');
       const kind = i.kind === 'float' ? 'Float' : i.kind === 'bottom' ? 'Bottom' : i.topwater ? 'Topwater' : `Runs ${i.dive} m`;
       return stat('Type', kind) + (i.idealSpeed ? stat('Best speed', `${i.idealSpeed} m/s`) : '');
     };
@@ -722,6 +723,7 @@ export class Ui {
             ${card('Drag', 'The setting that ties it together. Mouse wheel or [ ]. It starts at half your line strength. Lower it for big fish so the reel gives line instead of snapping; raise it so you can gain line on a tired fish.')}
             ${card('Broken rod', 'Over-load the rod and it breaks. Repair it in Tackle (a quarter of its price, at least 20 REEL) before your next cast.')}
             ${card('Fish finder', 'Electronics in Tackle. Sonar on your HUD shows the bottom, your lure and fish along your cast line. K turns it on and off.')}
+            ${card('Boats', 'Buy one in Tackle (Boats). Press G to launch from your spot, W and S for throttle, A and D to steer, and G again to get back on the bank. The boat goes as far as its range from where you launched. You fish over the nearest spot’s fish, so you can reach deep water the bank can’t. Stop to cast; the boat holds still while your line is out.')}
           </div>
           <div class="section"><h3>Rigs and lures</h3><table class="keys">${LURES.map((l) => {
             const how = l.kind === 'float' ? 'Hangs bait under a float at the depth you set. Wait for the dip, then strike.' : l.kind === 'bottom' ? 'Sits on the bottom. Watch the rod tip.' : l.topwater ? `Works on the surface. Pop it and pause; best around ${l.idealSpeed} m/s.` : `Must be retrieved. Runs about ${l.dive} m deep; best at ${l.idealSpeed} m/s${l.pauseAppeal >= 0.6 ? ', and fish hit it on the pause' : ''}.`;
@@ -784,6 +786,8 @@ export class Ui {
           ['Time ×20', 'Z', 'Menu bar'],
           ['Photo mode', 'P, then click or Space to snap', 'Menu bar'],
           ['Fish finder on/off', 'K', ''],
+          ['Launch or dock a boat', 'G', 'Boat'],
+          ['Drive a boat', 'W / S throttle, A / D steer', 'Arrow pad'],
           ['Close a menu', 'Esc', 'Close']
         ])}<p class="note">Graphics (Low, Medium, High) and Sound are on the menu bar.</p>`
       }

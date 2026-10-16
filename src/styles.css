@@ -266,7 +266,7 @@ body.photo #hud { display: none; }
   .news { top: 36%; width: 92vw; }
   .menu-bar button kbd { display: none; }
   .menu-bar button { padding: 6px 8px; font-size: 12px; }
-  .touch { bottom: 96px; }
+  .touch { bottom: 112px; }
   .map-wrap { grid-template-columns: 1fr; }
   .cast-meter { bottom: 230px; }
 }
@@ -340,4 +340,18 @@ table.odds td, table.odds th { padding: 3px 6px; text-align: left; border-bottom
 @media (max-width: 760px) {
   .coach { top: 150px; font-size: 13px; padding: 10px 12px; }
   .keys td { padding: 5px 4px; font-size: 12px; }
+}
+/* Boat driving pad (touch), shown only while driving a boat. */
+.drive-pad { display: none; grid-template-columns: repeat(3, 52px); grid-template-rows: 52px 52px; gap: 6px; align-self: flex-end; }
+.hud.boating.driving .drive-pad { display: grid; }
+.drive-pad button { font-size: 18px; padding: 0; }
+.drive-pad [data-touch='fwd'] { grid-column: 2; grid-row: 1; }
+.drive-pad [data-touch='left'] { grid-column: 1; grid-row: 2; }
+.drive-pad [data-touch='back'] { grid-column: 2; grid-row: 2; }
+.drive-pad [data-touch='right'] { grid-column: 3; grid-row: 2; }
+/* On phones there's no room beside the buttons: while driving, drag and speed (not needed until you
+   cast) make way and the pad sits above the Boat button. */
+@media (max-width: 760px) {
+  .drive-pad { position: absolute; left: 12px; bottom: 44px; }
+  .hud.driving .touch-left button:not([data-touch='boat']) { display: none; }
 }
